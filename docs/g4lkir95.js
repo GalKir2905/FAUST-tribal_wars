@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         G4lKir95 Mass Scavenging
 // @namespace    http://tampermonkey.net/
-// @version      2.0.1
+// @version      2.0.0
 // @description  Mass scavenging with repeat system - Combined Sophie + G4lKir95
 // @author       G4lKir95
 // @match        https://*.die-staemme.de/game.php*
@@ -301,7 +301,7 @@
                 </tbody>
             </table>
             
-            <!-- УБРАНЫ ВСЕ КНОПКИ УПРАВЛЕНИЯ ИЗ SOPHIE -->
+            <!-- Убрана кнопка "Рассчитать время для каждой страницы" -->
         </div>
         `;
 
@@ -310,19 +310,9 @@
     }
 
     function initServerTime() {
-        try {
-            const serverDateEl = document.querySelector("#serverDate");
-            const serverTimeEl = document.querySelector("#serverTime");
-            if (serverDateEl && serverTimeEl) {
-                serverTimeTemp = serverDateEl.innerText + " " + serverTimeEl.innerText;
-                serverTime = serverTimeTemp.match(/^([0][1-9]|[12][0-9]|3[01])[\/\-]([0][1-9]|1[012])[\/\-](\d{4})( (0?[0-9]|[1][0-9]|[2][0-3])[:]([0-5][0-9])([:]([0-5][0-9]))?)?$/);
-                if (serverTime) {
-                    serverDate = Date.parse(serverTime[3] + "/" + serverTime[2] + "/" + serverTime[1] + serverTime[4]);
-                }
-            }
-        } catch (e) {
-            console.log('G4lKir95: Error initializing server time', e);
-        }
+        serverTimeTemp = $("#serverDate")[0].innerText + " " + $("#serverTime")[0].innerText;
+        serverTime = serverTimeTemp.match(/^([0][1-9]|[12][0-9]|3[01])[\/\-]([0][1-9]|1[012])[\/\-](\d{4})( (0?[0-9]|[1][0-9]|[2][0-3])[:]([0-5][0-9])([:]([0-5][0-9]))?)?$/);
+        serverDate = Date.parse(serverTime[3] + "/" + serverTime[2] + "/" + serverTime[1] + serverTime[4]);
     }
 
     function initSophieControls() {
@@ -333,32 +323,19 @@
     }
 
     function loadSophieSettings() {
-        // Загрузка настроек из localStorage
-        try {
-            troopTypeEnabled = JSON.parse(localStorage.getItem("troopTypeEnabled") || "{}");
-            keepHome = JSON.parse(localStorage.getItem("keepHome") || "{}");
-            categoryEnabled = JSON.parse(localStorage.getItem("categoryEnabled") || "[true,true,true,true]");
-            prioritiseHighCat = JSON.parse(localStorage.getItem("prioritiseHighCat") || "false");
-            sendOrder = JSON.parse(localStorage.getItem("sendOrder") || "[]");
-            runTimes = JSON.parse(localStorage.getItem("runTimes") || '{"off":4,"def":4}');
-        } catch (e) {
-            console.log('G4lKir95: Error loading Sophie settings', e);
-            // Устанавливаем значения по умолчанию
-            troopTypeEnabled = {};
-            keepHome = {};
-            categoryEnabled = [true, true, true, true];
-            prioritiseHighCat = false;
-            sendOrder = [];
-            runTimes = {off: 4, def: 4};
-        }
+        // Загрузка настроек из localStorage (упрощенная версия)
+        troopTypeEnabled = JSON.parse(localStorage.getItem("troopTypeEnabled") || "{}");
+        keepHome = JSON.parse(localStorage.getItem("keepHome") || "{}");
+        categoryEnabled = JSON.parse(localStorage.getItem("categoryEnabled") || "[true,true,true,true]");
+        prioritiseHighCat = JSON.parse(localStorage.getItem("prioritiseHighCat") || "false");
+        sendOrder = JSON.parse(localStorage.getItem("sendOrder") || "[]");
+        runTimes = JSON.parse(localStorage.getItem("runTimes") || '{"off":4,"def":4}');
     }
 
     function createUnitCheckboxes() {
         const worldUnits = window.game_data?.units || ['spear', 'sword', 'axe', 'archer', 'light', 'marcher', 'heavy'];
         const imgRow = document.getElementById('imgRow');
         
-        if (!imgRow) return;
-
         worldUnits.forEach(unit => {
             if (!['militia', 'snob', 'ram', 'catapult', 'spy', 'knight'].includes(unit)) {
                 const html = `
@@ -486,8 +463,8 @@
         console.log("G4lKir95: Starting mass scavenging process...");
         showNotification('Запуск массового сбора...', 'info');
         
-        // Эмуляция процесса сбора
-        simulateScavengingProcess().then(() => {
+        // Эмуляция процесса (замените на реальную логику Sophie)
+        setTimeout(() => {
             showNotification('Массовый сбор завершен!', 'success');
             if (window.g4lkir95_updateProgress) {
                 window.g4lkir95_updateProgress(`Повтор ${currentRepeat} завершен`);
@@ -495,18 +472,7 @@
             
             // Запускаем следующий повтор если нужно
             scheduleNextRun();
-        });
-    }
-
-    function simulateScavengingProcess() {
-        return new Promise((resolve) => {
-            // Эмуляция процесса сбора (2-5 секунд)
-            const duration = 2000 + Math.random() * 3000;
-            setTimeout(() => {
-                console.log("G4lKir95: Mass scavenging completed");
-                resolve();
-            }, duration);
-        });
+        }, 3000);
     }
 
     // ========== СИСТЕМА ПОВТОРНОГО ЗАПУСКА ==========
@@ -564,6 +530,8 @@
             stopMassScavenging();
             return;
         }
+
+        // Следующий запуск планируется в функции getData после завершения
     }
 
     function scheduleNextRun() {
@@ -584,12 +552,6 @@
                 window.g4lkir95_updateStatus(false, 
                     repeatEnabled ? `Все повторы завершены (${repeatCount})` : 'Однократное выполнение завершено'
                 );
-            }
-            
-            if (repeatEnabled) {
-                showNotification(`Массовый сбор завершен! Выполнено повторов: ${currentRepeat}`, 'success');
-            } else {
-                showNotification('Массовый сбор завершен!', 'success');
             }
         }
     }
@@ -732,7 +694,7 @@
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
 
     function init() {
-        console.log('G4lKir95 Mass Scavenging v2.0.1 loaded');
+        console.log('G4lKir95 Mass Scavenging v2.0 loaded');
         
         // Добавляем стили
         const styleSheet = document.createElement('style');
@@ -748,7 +710,7 @@
         // Периодически проверяем кнопку
         setInterval(addLaunchButton, 3000);
 
-        showNotification('G4lKir95 Mass Scavenging v2.0.1 активирован!', 'success');
+        showNotification('G4lKir95 Mass Scavenging v2.0 активирован!', 'success');
         
         // Автоматически создаем интерфейс Sophie
         setTimeout(createSophieInterface, 1000);
