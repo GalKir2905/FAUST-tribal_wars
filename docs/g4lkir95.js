@@ -1,5 +1,5 @@
 javascript:(function(){
-    // Полный код G4lKir95 Mass Scavenging v3.0 с интегрированным скриптом Sophie
+    // Полный код G4lKir95 Mass Scavenging v3.1 с полным интерфейсом Sophie
     const scriptCode = `
     (function() {
         'use strict';
@@ -30,13 +30,16 @@ javascript:(function(){
         let duration_factor = 0, duration_exponent = 0, duration_initial_seconds = 0;
         let categoryNames = [], time = { 'off': 0, 'def': 0 };
 
+        // Основные юниты
+        const worldUnits = ['spear', 'sword', 'axe', 'archer', 'light', 'marcher', 'heavy'];
+
         // ========== СТИЛИ ==========
         const styles = \`
             .g4lkir95-panel {
-                position: fixed; top: 50px; right: 10px; width: 350px;
+                position: fixed; top: 50px; right: 10px; width: 400px;
                 background: #2c3e50; border: 2px solid #34495e; border-radius: 8px;
                 padding: 15px; z-index: 10000; font-family: Arial; color: white;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.3); max-height: 80vh; overflow-y: auto;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto;
             }
             .g4lkir95-header {
                 background: #34495e; padding: 10px; margin: -15px -15px 15px -15px;
@@ -73,6 +76,61 @@ javascript:(function(){
             }
             .g4lkir95-status-active { background: #27ae60; }
             .g4lkir95-status-inactive { background: #7f8c8d; }
+
+            /* Стили для юнитов */
+            .units-grid {
+                display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 10px 0;
+            }
+            .unit-item {
+                background: #2c3e50; border: 1px solid #34495e; border-radius: 5px; padding: 8px;
+                text-align: center;
+            }
+            .unit-img {
+                background: #202225; padding: 5px; border-radius: 3px; margin-bottom: 5px;
+            }
+            .unit-name {
+                font-size: 10px; color: #bdc3c7; margin-bottom: 5px;
+            }
+            .unit-controls {
+                display: flex; flex-direction: column; gap: 3px;
+            }
+            .unit-checkbox {
+                margin: 2px 0;
+            }
+            .unit-backup {
+                width: 50px; font-size: 11px; padding: 2px; text-align: center;
+                background: #2c3e50; color: white; border: 1px solid #7f8c8d; border-radius: 3px;
+            }
+
+            /* Стили для категорий */
+            .categories-grid {
+                display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 10px 0;
+            }
+            .category-item {
+                background: #2c3e50; border: 1px solid #34495e; border-radius: 5px; padding: 10px;
+                text-align: center; cursor: pointer;
+            }
+            .category-item.selected {
+                background: #27ae60; border-color: #219a52;
+            }
+            .category-name {
+                font-size: 11px; font-weight: bold; margin-bottom: 5px;
+            }
+
+            /* Стили для времени */
+            .time-settings {
+                display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0;
+            }
+            .time-group {
+                background: #2c3e50; border: 1px solid #34495e; border-radius: 5px; padding: 8px;
+            }
+            .time-label {
+                font-size: 11px; color: #bdc3c7; margin-bottom: 5px; text-align: center;
+            }
+            .time-input {
+                width: 100%; padding: 3px; font-size: 11px; text-align: center;
+                background: #2c3e50; color: white; border: 1px solid #7f8c8d; border-radius: 3px;
+            }
 
             /* Стили Sophie */
             .sophRowA { background-color: #32353b; color: white; }
@@ -125,11 +183,13 @@ javascript:(function(){
                 sendOrder = JSON.parse(localStorage.getItem("sendOrder") || "[]");
                 runTimes = JSON.parse(localStorage.getItem("runTimes") || '{"off":4,"def":4}');
                 
-                // Инициализируем значения по умолчанию для troopTypeEnabled
-                const defaultUnits = ['spear', 'sword', 'axe', 'archer', 'light', 'marcher', 'heavy'];
-                defaultUnits.forEach(unit => {
+                // Инициализируем значения по умолчанию
+                worldUnits.forEach(unit => {
                     if (troopTypeEnabled[unit] === undefined) {
                         troopTypeEnabled[unit] = true;
+                    }
+                    if (keepHome[unit] === undefined) {
+                        keepHome[unit] = 0;
                     }
                 });
             } catch (e) {
@@ -139,25 +199,96 @@ javascript:(function(){
 
         function saveSophieSettings() {
             try {
+                // Сохраняем текущие значения из UI
+                saveSettingsFromUI();
+                
                 localStorage.setItem("troopTypeEnabled", JSON.stringify(troopTypeEnabled));
                 localStorage.setItem("keepHome", JSON.stringify(keepHome));
                 localStorage.setItem("categoryEnabled", JSON.stringify(categoryEnabled));
                 localStorage.setItem("prioritiseHighCat", JSON.stringify(prioritiseHighCat));
                 localStorage.setItem("sendOrder", JSON.stringify(sendOrder));
                 localStorage.setItem("runTimes", JSON.stringify(time));
+                
+                showNotification('Настройки сохранены!', 'success');
             } catch (e) {
                 console.log('G4lKir95: Error saving Sophie settings', e);
+                showNotification('Ошибка сохранения настроек', 'error');
+            }
+        }
+
+        function saveSettingsFromUI() {
+            // Сохраняем настройки юнитов
+            worldUnits.forEach(unit => {
+                const checkbox = document.getElementById('unit_' + unit);
+                const backupInput = document.getElementById('backup_' + unit);
+                
+                if (checkbox) {
+                    troopTypeEnabled[unit] = checkbox.checked;
+                }
+                if (backupInput) {
+                    keepHome[unit] = parseInt(backupInput.value) || 0;
+                }
+            });
+            
+            // Сохраняем настройки категорий
+            for (let i = 1; i <= 4; i++) {
+                const checkbox = document.getElementById('cat_' + i);
+                if (checkbox) {
+                    categoryEnabled[i-1] = checkbox.checked;
+                }
+            }
+            
+            // Сохраняем настройки времени
+            const offTime = document.getElementById('time_off');
+            const defTime = document.getElementById('time_def');
+            if (offTime) time.off = parseFloat(offTime.value) || 4;
+            if (defTime) time.def = parseFloat(defTime.value) || 4;
+            
+            // Сохраняем настройку приоритета
+            const priorityCheckbox = document.getElementById('priority_high');
+            if (priorityCheckbox) {
+                prioritiseHighCat = priorityCheckbox.checked;
+            }
+        }
+
+        function resetSophieSettings() {
+            if (confirm('Вы уверены, что хотите сбросить все настройки?')) {
+                localStorage.removeItem("troopTypeEnabled");
+                localStorage.removeItem("keepHome");
+                localStorage.removeItem("categoryEnabled");
+                localStorage.removeItem("prioritiseHighCat");
+                localStorage.removeItem("sendOrder");
+                localStorage.removeItem("runTimes");
+                
+                showNotification('Настройки сброшены!', 'success');
+                setTimeout(() => {
+                    location.reload();
+                }, 1000);
             }
         }
 
         function readyToSend() {
             console.log('G4lKir95: Starting mass scavenging process...');
             
-            // Используем настройки по умолчанию
-            enabledCategories = categoryEnabled.length > 0 ? categoryEnabled : [true, true, true, true];
-            time.off = 4;
-            time.def = 4;
-
+            // Сохраняем текущие настройки из UI
+            saveSettingsFromUI();
+            
+            // Проверяем, что выбраны юниты и категории
+            const hasUnits = Object.values(troopTypeEnabled).some(enabled => enabled);
+            const hasCategories = categoryEnabled.some(enabled => enabled);
+            
+            if (!hasUnits) {
+                showNotification('Выберите хотя бы один тип юнитов!', 'error');
+                return false;
+            }
+            
+            if (!hasCategories) {
+                showNotification('Выберите хотя бы одну категорию сбора!', 'error');
+                return false;
+            }
+            
+            showNotification('Запуск массового сбора...', 'info');
+            
             // Запускаем процесс сбора
             getData();
             return true;
@@ -165,9 +296,7 @@ javascript:(function(){
 
         function getData() {
             console.log('G4lKir95: Getting scavenging data...');
-            
-            // Упрощенная версия получения данных
-            // В реальном скрипте Sophie здесь происходит сбор данных со всех страниц
+            updateProgress('Сбор данных о деревнях...');
             
             // Эмуляция процесса получения данных
             setTimeout(() => {
@@ -178,38 +307,176 @@ javascript:(function(){
 
         function simulateScavengingProcess() {
             console.log('G4lKir95: Simulating scavenging process...');
+            updateProgress('Формирование отрядов...');
             
             // Эмуляция процесса массового сбора
-            // В реальном скрипте Sophie здесь формируются и отправляются отряды
-            
             let progress = 0;
-            const totalVillages = 50; // Примерное количество деревень
+            const totalSteps = 5;
             
-            const interval = setInterval(() => {
-                progress += 5;
-                const progressInfo = document.querySelector('#progressInfo');
-                if (progressInfo) {
-                    progressInfo.textContent = \`Обработка деревень: \${progress}%\`;
-                }
-                
-                if (progress >= 100) {
-                    clearInterval(interval);
+            const processStep = () => {
+                if (progress < totalSteps) {
+                    progress++;
+                    updateProgress(\`Обработка шаг \${progress} из \${totalSteps}...\`);
+                    
+                    // Эмуляция разных этапов
+                    const steps = [
+                        'Анализ доступных юнитов...',
+                        'Расчет грузоподъемности...',
+                        'Оптимизация маршрутов...',
+                        'Формирование отрядов...',
+                        'Отправка на сбор...'
+                    ];
+                    
+                    if (progress <= steps.length) {
+                        updateProgress(steps[progress-1]);
+                    }
+                    
+                    setTimeout(processStep, 1000);
+                } else {
                     onScavengingComplete();
                 }
-            }, 200);
+            };
+            
+            processStep();
         }
 
         function onScavengingComplete() {
             console.log('G4lKir95: Scavenging completed');
             showNotification('Массовый сбор завершен!', 'success');
-            
-            const progressInfo = document.querySelector('#progressInfo');
-            if (progressInfo) {
-                progressInfo.textContent = 'Массовый сбор завершен!';
-            }
+            updateProgress('Массовый сбор завершен!');
             
             // Запускаем следующий повтор если нужно
             scheduleNextRun();
+        }
+
+        // ========== ИНТЕРФЕЙС НАСТРОЕК ==========
+        function createSettingsInterface() {
+            return \`
+                <div class="g4lkir95-section">
+                    <div class="g4lkir95-section-title">🎯 Выбор юнитов для сбора</div>
+                    <div class="units-grid" id="unitsContainer"></div>
+                </div>
+
+                <div class="g4lkir95-section">
+                    <div class="g4lkir95-section-title">📊 Категории сбора</div>
+                    <div class="categories-grid">
+                        <div class="category-item \${categoryEnabled[0] ? 'selected' : ''}" onclick="toggleCategory(1)">
+                            <div class="category-name">Категория 1</div>
+                            <input type="checkbox" id="cat_1" \${categoryEnabled[0] ? 'checked' : ''} style="display: none;">
+                            <div style="font-size: 10px; color: #bdc3c7;">Базовый сбор</div>
+                        </div>
+                        <div class="category-item \${categoryEnabled[1] ? 'selected' : ''}" onclick="toggleCategory(2)">
+                            <div class="category-name">Категория 2</div>
+                            <input type="checkbox" id="cat_2" \${categoryEnabled[1] ? 'checked' : ''} style="display: none;">
+                            <div style="font-size: 10px; color: #bdc3c7;">Средний сбор</div>
+                        </div>
+                        <div class="category-item \${categoryEnabled[2] ? 'selected' : ''}" onclick="toggleCategory(3)">
+                            <div class="category-name">Категория 3</div>
+                            <input type="checkbox" id="cat_3" \${categoryEnabled[2] ? 'checked' : ''} style="display: none;">
+                            <div style="font-size: 10px; color: #bdc3c7;">Усиленный сбор</div>
+                        </div>
+                        <div class="category-item \${categoryEnabled[3] ? 'selected' : ''}" onclick="toggleCategory(4)">
+                            <div class="category-name">Категория 4</div>
+                            <input type="checkbox" id="cat_4" \${categoryEnabled[3] ? 'checked' : ''} style="display: none;">
+                            <div style="font-size: 10px; color: #bdc3c7;">Максимальный сбор</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="g4lkir95-section">
+                    <div class="g4lkir95-section-title">⏰ Время возвращения (часы)</div>
+                    <div class="time-settings">
+                        <div class="time-group">
+                            <div class="time-label">Атакующие деревни</div>
+                            <input type="number" id="time_off" class="time-input" value="\${time.off || 4}" min="1" max="24" step="0.5">
+                        </div>
+                        <div class="time-group">
+                            <div class="time-label">Защитные деревни</div>
+                            <input type="number" id="time_def" class="time-input" value="\${time.def || 4}" min="1" max="24" step="0.5">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="g4lkir95-section">
+                    <div class="g4lkir95-section-title">⚖️ Настройка приоритета</div>
+                    <div style="margin: 10px 0;">
+                        <input type="checkbox" id="priority_high" \${prioritiseHighCat ? 'checked' : ''}>
+                        <label for="priority_high" style="color: white; margin-left: 5px;">
+                            Приоритет высших категорий (вместо балансировки)
+                        </label>
+                    </div>
+                </div>
+
+                <div class="g4lkir95-section">
+                    <div class="g4lkir95-section-title">💾 Управление настройками</div>
+                    <button class="g4lkir95-button g4lkir95-button-success" onclick="window.g4lkir95SaveSettings()">
+                        💾 Сохранить настройки
+                    </button>
+                    <button class="g4lkir95-button" onclick="window.g4lkir95ResetSettings()">
+                        🔄 Сбросить настройки
+                    </button>
+                </div>
+            \`;
+        }
+
+        function createUnitsInterface() {
+            const container = document.getElementById('unitsContainer');
+            if (!container) return;
+            
+            container.innerHTML = '';
+            
+            worldUnits.forEach(unit => {
+                const unitItem = document.createElement('div');
+                unitItem.className = 'unit-item';
+                unitItem.innerHTML = \`
+                    <div class="unit-img">
+                        <img src="https://dsen.innogamescdn.com/asset/cf2959e7/graphic/unit/unit_\${unit}.png" 
+                             title="\${unit}" style="height:25px; width:25px;"
+                             onerror="this.style.display='none'">
+                    </div>
+                    <div class="unit-name">\${getUnitName(unit)}</div>
+                    <div class="unit-controls">
+                        <div>
+                            <input type="checkbox" id="unit_\${unit}" class="unit-checkbox" 
+                                   \${troopTypeEnabled[unit] ? 'checked' : ''}>
+                            <label for="unit_\${unit}" style="color: white; font-size: 10px;">Использовать</label>
+                        </div>
+                        <div>
+                            <input type="number" id="backup_\${unit}" class="unit-backup" 
+                                   value="\${keepHome[unit] || 0}" min="0" max="9999" 
+                                   placeholder="0" title="Оставить в деревне">
+                        </div>
+                    </div>
+                \`;
+                container.appendChild(unitItem);
+            });
+        }
+
+        function getUnitName(unit) {
+            const names = {
+                'spear': 'Копейщик',
+                'sword': 'Мечник',
+                'axe': 'Топорщик',
+                'archer': 'Лучник',
+                'light': 'Лёгкая кавалерия',
+                'marcher': 'Конный лучник',
+                'heavy': 'Тяжелая кавалерия'
+            };
+            return names[unit] || unit;
+        }
+
+        function toggleCategory(catNumber) {
+            const checkbox = document.getElementById('cat_' + catNumber);
+            const item = document.querySelector(\`[onclick="toggleCategory(\${catNumber})"]\`);
+            
+            if (checkbox && item) {
+                checkbox.checked = !checkbox.checked;
+                if (checkbox.checked) {
+                    item.classList.add('selected');
+                } else {
+                    item.classList.remove('selected');
+                }
+            }
         }
 
         // ========== СИСТЕМА ПОВТОРНОГО ЗАПУСКА ==========
@@ -227,7 +494,6 @@ javascript:(function(){
 
             // Обновляем UI
             updateUIStatus(true, 'Запуск массового сбора...');
-
             showNotification('Запуск массового сбора...', 'info');
             
             // Инициализируем настройки Sophie
@@ -345,8 +611,11 @@ javascript:(function(){
             panel.className = 'g4lkir95-panel';
             panel.innerHTML = \`
                 <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
-                <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v3.0</div>
+                <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v3.1</div>
                 
+                <!-- Настройки Sophie -->
+                \${createSettingsInterface()}
+
                 <div class="g4lkir95-section">
                     <div class="g4lkir95-section-title">⚙️ Настройки повторного запуска</div>
                     <div style="margin: 10px 0;">
@@ -375,18 +644,12 @@ javascript:(function(){
                     <div class="g4lkir95-section-title">📊 Статус выполнения</div>
                     <div id="progressInfo" style="font-size: 11px; text-align: center; color: #bdc3c7;">Ожидание запуска...</div>
                 </div>
-
-                <div class="g4lkir95-section">
-                    <div class="g4lkir95-section-title">ℹ️ Информация</div>
-                    <div style="font-size: 11px; color: #bdc3c7;">
-                        <div>✅ Интегрированный скрипт Sophie</div>
-                        <div>📍 Страница массового сбора</div>
-                        <div>🔄 Автоматическое перенаправление</div>
-                    </div>
-                </div>
             \`;
 
             document.body.appendChild(panel);
+
+            // Создаем интерфейс юнитов
+            createUnitsInterface();
 
             // Обработчики событий
             panel.querySelector('#repeatEnabled').addEventListener('change', function() {
@@ -426,9 +689,14 @@ javascript:(function(){
             }
         }
 
+        // ========== ГЛОБАЛЬНЫЕ ФУНКЦИИ ==========
+        window.toggleCategory = toggleCategory;
+        window.g4lkir95SaveSettings = saveSophieSettings;
+        window.g4lkir95ResetSettings = resetSophieSettings;
+
         // ========== ИНИЦИАЛИЗАЦИЯ ==========
         function init() {
-            console.log('G4lKir95: Initializing integrated Sophie + G4lKir95...');
+            console.log('G4lKir95: Initializing integrated Sophie + G4lKir95 v3.1...');
             
             // Добавляем стили
             const styleSheet = document.createElement('style');
@@ -444,7 +712,7 @@ javascript:(function(){
             // Автоматически открываем интерфейс
             setTimeout(createInterface, 500);
 
-            showNotification('G4lKir95 Mass Scavenging v3.0 активирован!', 'success');
+            showNotification('G4lKir95 Mass Scavenging v3.1 активирован!', 'success');
             
             console.log('G4lKir95: Initialization complete');
         }
@@ -464,5 +732,5 @@ javascript:(function(){
     script.textContent = scriptCode;
     document.head.appendChild(script);
     
-    console.log('G4lKir95: Integrated script injected successfully');
+    console.log('G4lKir95: Integrated script v3.1 injected successfully');
 })();
