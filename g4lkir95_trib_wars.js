@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         G4lKir95 Mass Scavenging
 // @namespace    http://tampermonkey.net/
-// @version      2.0.1
+// @version      2.0.2
 // @description  Mass scavenging with repeat system - Combined Sophie + G4lKir95
 // @author       G4lKir95
 // @match        https://*.die-staemme.de/game.php*
@@ -15,12 +15,9 @@
 (function() {
     'use strict';
 
-    // Проверяем, находимся ли мы на нужной странице
-    if (window.location.href.indexOf('screen=place') === -1) {
-        return;
-    }
+    if (window.location.href.indexOf('screen=place') === -1) return;
 
-    // ========== КОНФИГУРАЦИЯ И ПЕРЕМЕННЫЕ ==========
+    // Переменные
     let repeatEnabled = false;
     let repeatCount = 1;
     let repeatInterval = 60;
@@ -28,23 +25,10 @@
     let repeatTimer = null;
     let isRunning = false;
 
-    // Глобальные переменные из скрипта Sophie
-    let serverTimeTemp, serverTime, serverDate, scavengeInfo;
-    let troopTypeEnabled = {}, keepHome = {}, categoryEnabled = [];
-    let prioritiseHighCat = false, sendOrder = [], runTimes = {};
-    let arrayWithData, enabledCategories = [], availableUnits = [];
-    let squad_requests = [], squad_requests_premium = [];
-    let duration_factor = 0, duration_exponent = 0, duration_initial_seconds = 0;
-    let categoryNames = [], time = { 'off': 0, 'def': 0 };
-    let premiumBtnEnabled = false;
-
-    // ========== СТИЛИ ==========
+    // Стили
     const styles = `
-        .g4lkir95-panel {
+        .g4lkir95-panel, .g4lkir95-sophie-panel {
             position: fixed;
-            top: 50px;
-            right: 10px;
-            width: 350px;
             background: #2c3e50;
             border: 2px solid #34495e;
             border-radius: 8px;
@@ -55,6 +39,18 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
             max-height: 80vh;
             overflow-y: auto;
+        }
+        .g4lkir95-panel {
+            top: 50px;
+            right: 10px;
+            width: 350px;
+        }
+        .g4lkir95-sophie-panel {
+            top: 50px;
+            left: 10px;
+            width: 600px;
+            background: #36393f;
+            border-color: #3e4147;
         }
         .g4lkir95-header {
             background: #34495e;
@@ -177,25 +173,32 @@
         .g4lkir95-launch-btn:hover {
             background: #c0392b;
         }
-
-        /* Стили из Sophie */
-        .sophRowA { background-color: #32353b; color: white; }
-        .sophRowB { background-color: #36393f; color: white; }
-        .sophHeader { background-color: #202225; font-weight: bold; color: white; }
-        .btnSophie { background-image: linear-gradient(#6e7178 0%, #36393f 30%, #202225 80%, black 100%); color: white; }
-        .btnSophie:hover { background-image: linear-gradient(#7b7e85 0%, #40444a 30%, #393c40 80%, #171717 100%); }
+        .sophie-unit-table {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            justify-content: center;
+        }
+        .sophie-unit-item {
+            width: 80px;
+            text-align: center;
+        }
+        .sophie-unit-img {
+            background: #202225;
+            padding: 5px;
+            border-radius: 3px;
+        }
+        .sophie-unit-controls {
+            background: #36393f;
+            padding: 3px;
+        }
     `;
 
-    // ========== ФУНКЦИИ УПРАВЛЕНИЯ ==========
-
+    // Функции
     function loadSettings() {
-        const savedEnabled = localStorage.getItem('g4lkir95_repeatEnabled');
-        const savedCount = localStorage.getItem('g4lkir95_repeatCount');
-        const savedInterval = localStorage.getItem('g4lkir95_repeatInterval');
-        
-        if (savedEnabled !== null) repeatEnabled = savedEnabled === 'true';
-        if (savedCount !== null) repeatCount = parseInt(savedCount) || 1;
-        if (savedInterval !== null) repeatInterval = parseInt(savedInterval) || 60;
+        repeatEnabled = localStorage.getItem('g4lkir95_repeatEnabled') === 'true';
+        repeatCount = parseInt(localStorage.getItem('g4lkir95_repeatCount')) || 1;
+        repeatInterval = parseInt(localStorage.getItem('g4lkir95_repeatInterval')) || 60;
     }
 
     function saveSettings() {
@@ -221,441 +224,170 @@
         `;
         notification.textContent = message;
         document.body.appendChild(notification);
-
-        setTimeout(() => {
-            notification.remove();
-        }, 3000);
+        setTimeout(() => notification.remove(), 3000);
     }
 
-    // ========== ИНТЕРФЕЙС SOPHIE (МОДИФИЦИРОВАННЫЙ) ==========
-
+    // Интерфейс Sophie (БЕЗ КНОПКИ РАССЧИТАТЬ)
     function createSophieInterface() {
-        // Удаляем существующий интерфейс если есть
-        const existingUI = document.getElementById('massScavengeSophie');
-        if (existingUI) {
-            existingUI.remove();
-        }
+        const existing = document.querySelector('.g4lkir95-sophie-panel');
+        if (existing) existing.remove();
 
-        // Инициализируем серверное время
-        initServerTime();
+        const panel = document.createElement('div');
+        panel.className = 'g4lkir95-sophie-panel';
+        panel.innerHTML = `
+            <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
+            <div class="g4lkir95-header">⚙️ Настройки сбора ресурсов</div>
+            
+            <div class="g4lkir95-section">
+                <div class="g4lkir95-section-title">🎯 Выберите типы юнитов</div>
+                <div class="sophie-unit-table" id="unitTable"></div>
+            </div>
+            
+            <div class="g4lkir95-section">
+                <div class="g4lkir95-section-title">📊 Выберите категории сбора</div>
+                <div style="display: flex; justify-content: space-between; text-align: center;">
+                    <div><input type="checkbox" id="cat1"><label for="cat1" style="color:white; margin-left:5px;">Кат. 1</label></div>
+                    <div><input type="checkbox" id="cat2"><label for="cat2" style="color:white; margin-left:5px;">Кат. 2</label></div>
+                    <div><input type="checkbox" id="cat3"><label for="cat3" style="color:white; margin-left:5px;">Кат. 3</label></div>
+                    <div><input type="checkbox" id="cat4"><label for="cat4" style="color:white; margin-left:5px;">Кат. 4</label></div>
+                </div>
+            </div>
 
-        const html = `
-        <div id="massScavengeSophie" class="ui-widget-content" style="width:580px;background-color:#36393f;cursor:move;z-index:50;max-height:85vh;overflow-y:auto;">
-            <button class="btn" id="x" onclick="closeWindow('massScavengeSophie')">X</button>
-            
-            <table id="massScavengeSophieTable" class="vis" border="1" style="width: 100%;background-color:#36393f;border-color:#3e4147">
-                <tr>
-                    <td colspan="10" id="massScavengeSophieTitle" style="text-align:center; width:auto; background-color:#202225">
-                        <h4 style="margin:5px">
-                            <center><u><font color="#ffffdf">Массовый сбор ресурсов</font></u></center>
-                        </h4>
-                    </td>
-                </tr>
-                <tr style="background-color:#36393f">
-                    <td style="text-align:center;background-color:#202225" colspan="15">
-                        <h5 style="margin:3px">
-                            <center><u><font color="#ffffdf">Выберите типы юнитов/ПОРЯДОК для сбора</font></u></center>
-                        </h5>
-                    </td>
-                </tr>
-                <tr id="imgRow"></tr>
-            </table>
-            
-            <table class="vis" border="1" style="width: 100%;background-color:#36393f;border-color:#3e4147; margin-top:5px;">
-                <tbody>
-                    <tr style="background-color:#36393f">
-                        <td style="text-align:center;background-color:#202225" colspan="4">
-                            <h5 style="margin:3px">
-                                <center><u><font color="#ffffdf">Выберите категории для использования</font></u></center>
-                            </h5>
-                        </td>
-                    </tr>
-                    <tr id="categories" style="text-align:center; width:auto; background-color:#202225">
-                        <td style="text-align:center; width:auto; background-color:#202225;padding: 3px;">
-                            <font color="#ffffdf" style="font-size:12px">${categoryNames[1]?.name || 'Кат. 1'}</font>
-                        </td>
-                        <td style="text-align:center; width:auto; background-color:#202225;padding: 3px;">
-                            <font color="#ffffdf" style="font-size:12px">${categoryNames[2]?.name || 'Кат. 2'}</font>
-                        </td>
-                        <td style="text-align:center; width:auto; background-color:#202225;padding: 3px;">
-                            <font color="#ffffdf" style="font-size:12px">${categoryNames[3]?.name || 'Кат. 3'}</font>
-                        </td>
-                        <td style="text-align:center; width:auto; background-color:#202225;padding: 3px;">
-                            <font color="#ffffdf" style="font-size:12px">${categoryNames[4]?.name || 'Кат. 4'}</font>
-                        </td>
-                    </tr>
-                    <tr>
-                        <td style="text-align:center; width:auto; background-color:#36393f">
-                            <center><input type="checkbox" ID="category1" name="cat1"></center>
-                        </td>
-                        <td style="text-align:center; width:auto; background-color:#36393f">
-                            <center><input type="checkbox" ID="category2" name="cat2"></center>
-                        </td>
-                        <td style="text-align:center; width:auto; background-color:#36393f">
-                            <center><input type="checkbox" ID="category3" name="cat3"></center>
-                        </td>
-                        <td style="text-align:center; width:auto; background-color:#36393f">
-                            <center><input type="checkbox" ID="category4" name="cat4"></center>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-            
-            <!-- УБРАНЫ ВСЕ КНОПКИ УПРАВЛЕНИЯ ИЗ SOPHIE -->
-        </div>
+            <div class="g4lkir95-section">
+                <div class="g4lkir95-section-title">💾 Управление настройками</div>
+                <button class="g4lkir95-button" onclick="saveSophieSettings()">Сохранить настройки</button>
+                <button class="g4lkir95-button" onclick="resetSophieSettings()">Сбросить настройки</button>
+            </div>
         `;
 
-        document.body.insertAdjacentHTML('afterbegin', html);
-        initSophieControls();
-    }
-
-    function initServerTime() {
-        try {
-            const serverDateEl = document.querySelector("#serverDate");
-            const serverTimeEl = document.querySelector("#serverTime");
-            if (serverDateEl && serverTimeEl) {
-                serverTimeTemp = serverDateEl.innerText + " " + serverTimeEl.innerText;
-                serverTime = serverTimeTemp.match(/^([0][1-9]|[12][0-9]|3[01])[\/\-]([0][1-9]|1[012])[\/\-](\d{4})( (0?[0-9]|[1][0-9]|[2][0-3])[:]([0-5][0-9])([:]([0-5][0-9]))?)?$/);
-                if (serverTime) {
-                    serverDate = Date.parse(serverTime[3] + "/" + serverTime[2] + "/" + serverTime[1] + serverTime[4]);
-                }
-            }
-        } catch (e) {
-            console.log('G4lKir95: Error initializing server time', e);
-        }
-    }
-
-    function initSophieControls() {
-        // Инициализация элементов управления Sophie
+        document.body.appendChild(panel);
+        initSophieUnits();
         loadSophieSettings();
-        createUnitCheckboxes();
-        setupEventListeners();
+    }
+
+    function initSophieUnits() {
+        const units = ['spear', 'sword', 'axe', 'archer', 'light', 'marcher', 'heavy'];
+        const table = document.getElementById('unitTable');
+        
+        units.forEach(unit => {
+            const item = document.createElement('div');
+            item.className = 'sophie-unit-item';
+            item.innerHTML = `
+                <div class="sophie-unit-img">
+                    <img src="https://dsen.innogamescdn.com/asset/cf2959e7/graphic/unit/unit_${unit}.png" title="${unit}" style="height:20px;">
+                </div>
+                <div class="sophie-unit-controls">
+                    <input type="checkbox" id="${unit}" style="margin: 2px;">
+                </div>
+                <div class="sophie-unit-controls">
+                    <input type="number" id="${unit}_backup" value="0" min="0" style="width: 40px; font-size: 10px; padding: 1px;">
+                </div>
+                <div style="font-size: 9px; color: #bdc3c7; margin-top: 2px;">${unit}</div>
+            `;
+            table.appendChild(item);
+        });
     }
 
     function loadSophieSettings() {
-        // Загрузка настроек из localStorage
+        // Загрузка настроек Sophie
         try {
-            troopTypeEnabled = JSON.parse(localStorage.getItem("troopTypeEnabled") || "{}");
-            keepHome = JSON.parse(localStorage.getItem("keepHome") || "{}");
-            categoryEnabled = JSON.parse(localStorage.getItem("categoryEnabled") || "[true,true,true,true]");
-            prioritiseHighCat = JSON.parse(localStorage.getItem("prioritiseHighCat") || "false");
-            sendOrder = JSON.parse(localStorage.getItem("sendOrder") || "[]");
-            runTimes = JSON.parse(localStorage.getItem("runTimes") || '{"off":4,"def":4}');
-        } catch (e) {
-            console.log('G4lKir95: Error loading Sophie settings', e);
-            // Устанавливаем значения по умолчанию
-            troopTypeEnabled = {};
-            keepHome = {};
-            categoryEnabled = [true, true, true, true];
-            prioritiseHighCat = false;
-            sendOrder = [];
-            runTimes = {off: 4, def: 4};
-        }
-    }
-
-    function createUnitCheckboxes() {
-        const worldUnits = window.game_data?.units || ['spear', 'sword', 'axe', 'archer', 'light', 'marcher', 'heavy'];
-        const imgRow = document.getElementById('imgRow');
-        
-        if (!imgRow) return;
-
-        worldUnits.forEach(unit => {
-            if (!['militia', 'snob', 'ram', 'catapult', 'spy', 'knight'].includes(unit)) {
-                const html = `
-                <td align="center" style="background-color:#36393f">
-                    <table class="vis" border="1" style="width: 80px">
-                        <tbody>    
-                            <tr>
-                                <td style="text-align:center;background-color:#202225;padding: 2px;">
-                                    <img src="https://dsen.innogamescdn.com/asset/cf2959e7/graphic/unit/unit_${unit}.png" title="${unit}" style="height:20px;">
-                                </td>
-                            </tr>
-                            <tr>
-                                <td align="center" style="background-color:#36393f;padding: 1px;">
-                                    <input type="checkbox" ID="${unit}" name="${unit}" style="transform:scale(0.8)">
-                                </td>
-                            </tr>
-                            <tr>
-                                <td style="text-align:center; background-color:#202225;padding: 1px;">
-                                    <font color="#ffffdf" style="font-size:9px">Backup</font>
-                                </td>
-                            </tr>
-                            <tr>
-                                <td align="center" style="background-color:#36393f;padding: 1px;">
-                                    <input type="text" ID="${unit}Backup" name="${unit}" value="${keepHome[unit] || 0}" size="3" style="font-size:10px; width:30px">
-                                </td>
-                            </tr>
-                        </tbody>  
-                    </table>
-                </td>`;
-                imgRow.insertAdjacentHTML('beforeend', html);
-            }
-        });
-    }
-
-    function setupEventListeners() {
-        // Инициализация чекбоксов
-        Object.keys(troopTypeEnabled).forEach(unit => {
-            const checkbox = document.getElementById(unit);
-            if (checkbox) {
-                checkbox.checked = troopTypeEnabled[unit];
-            }
-        });
-
-        // Инициализация категорий
-        categoryEnabled.forEach((enabled, index) => {
-            const checkbox = document.getElementById(`category${index + 1}`);
-            if (checkbox) {
-                checkbox.checked = enabled;
-            }
-        });
-    }
-
-    // ========== ОСНОВНАЯ ЛОГИКА SOPHIE ==========
-
-    function readyToSend() {
-        // Собираем настройки из интерфейса
-        collectSettings();
-        
-        // Проверяем обязательные настройки
-        if (!validateSettings()) {
-            return false;
-        }
-
-        // Сохраняем настройки
-        saveSophieSettings();
-        
-        // Запускаем процесс сбора
-        getData();
-        return true;
-    }
-
-    function collectSettings() {
-        const worldUnits = window.game_data?.units || ['spear', 'sword', 'axe', 'archer', 'light', 'marcher', 'heavy'];
-        
-        // Собираем типы юнитов
-        worldUnits.forEach(unit => {
-            if (!['militia', 'snob', 'ram', 'catapult', 'spy', 'knight'].includes(unit)) {
+            const troopTypeEnabled = JSON.parse(localStorage.getItem("troopTypeEnabled") || "{}");
+            const keepHome = JSON.parse(localStorage.getItem("keepHome") || "{}");
+            const categoryEnabled = JSON.parse(localStorage.getItem("categoryEnabled") || "[true,true,true,true]");
+            
+            Object.keys(troopTypeEnabled).forEach(unit => {
                 const checkbox = document.getElementById(unit);
-                const backup = document.getElementById(unit + 'Backup');
-                if (checkbox) troopTypeEnabled[unit] = checkbox.checked;
-                if (backup) keepHome[unit] = parseInt(backup.value) || 0;
-            }
-        });
-
-        // Собираем категории
-        enabledCategories = [
-            document.getElementById('category1')?.checked || false,
-            document.getElementById('category2')?.checked || false,
-            document.getElementById('category3')?.checked || false,
-            document.getElementById('category4')?.checked || false
-        ];
-
-        // Базовые настройки времени
-        time.off = 4;
-        time.def = 4;
-    }
-
-    function validateSettings() {
-        // Проверяем, что выбрана хотя бы одна категория
-        if (!enabledCategories.some(cat => cat)) {
-            showNotification('Выберите хотя бы одну категорию!', 'error');
-            return false;
+                if (checkbox) checkbox.checked = troopTypeEnabled[unit];
+            });
+            
+            Object.keys(keepHome).forEach(unit => {
+                const input = document.getElementById(unit + '_backup');
+                if (input) input.value = keepHome[unit];
+            });
+            
+            categoryEnabled.forEach((enabled, index) => {
+                const checkbox = document.getElementById('cat' + (index + 1));
+                if (checkbox) checkbox.checked = enabled;
+            });
+        } catch (e) {
+            console.log('Error loading Sophie settings:', e);
         }
-
-        // Проверяем, что выбран хотя бы один юнит
-        if (!Object.values(troopTypeEnabled).some(enabled => enabled)) {
-            showNotification('Выберите хотя бы один тип юнитов!', 'error');
-            return false;
-        }
-
-        return true;
     }
 
     function saveSophieSettings() {
+        const units = ['spear', 'sword', 'axe', 'archer', 'light', 'marcher', 'heavy'];
+        const troopTypeEnabled = {};
+        const keepHome = {};
+        const categoryEnabled = [];
+        
+        units.forEach(unit => {
+            const checkbox = document.getElementById(unit);
+            const backup = document.getElementById(unit + '_backup');
+            if (checkbox) troopTypeEnabled[unit] = checkbox.checked;
+            if (backup) keepHome[unit] = parseInt(backup.value) || 0;
+        });
+        
+        for (let i = 1; i <= 4; i++) {
+            const checkbox = document.getElementById('cat' + i);
+            categoryEnabled.push(checkbox ? checkbox.checked : true);
+        }
+        
         localStorage.setItem("troopTypeEnabled", JSON.stringify(troopTypeEnabled));
         localStorage.setItem("keepHome", JSON.stringify(keepHome));
-        localStorage.setItem("categoryEnabled", JSON.stringify(enabledCategories));
-        localStorage.setItem("prioritiseHighCat", JSON.stringify(prioritiseHighCat));
-        localStorage.setItem("sendOrder", JSON.stringify(sendOrder));
-        localStorage.setItem("runTimes", JSON.stringify(time));
-    }
-
-    function getData() {
-        // Упрощенная версия получения данных
-        console.log("G4lKir95: Starting mass scavenging process...");
-        showNotification('Запуск массового сбора...', 'info');
+        localStorage.setItem("categoryEnabled", JSON.stringify(categoryEnabled));
         
-        // Эмуляция процесса сбора
-        simulateScavengingProcess().then(() => {
-            showNotification('Массовый сбор завершен!', 'success');
-            if (window.g4lkir95_updateProgress) {
-                window.g4lkir95_updateProgress(`Повтор ${currentRepeat} завершен`);
-            }
-            
-            // Запускаем следующий повтор если нужно
-            scheduleNextRun();
-        });
+        showNotification('Настройки сохранены!', 'success');
     }
 
-    function simulateScavengingProcess() {
-        return new Promise((resolve) => {
-            // Эмуляция процесса сбора (2-5 секунд)
-            const duration = 2000 + Math.random() * 3000;
-            setTimeout(() => {
-                console.log("G4lKir95: Mass scavenging completed");
-                resolve();
-            }, duration);
-        });
+    function resetSophieSettings() {
+        localStorage.removeItem("troopTypeEnabled");
+        localStorage.removeItem("keepHome");
+        localStorage.removeItem("categoryEnabled");
+        showNotification('Настройки сброшены!', 'success');
+        setTimeout(() => location.reload(), 1000);
     }
 
-    // ========== СИСТЕМА ПОВТОРНОГО ЗАПУСКА ==========
-
-    function startMassScavenging(enableRepeat = false) {
-        if (isRunning) {
-            showNotification('Скрипт уже выполняется!', 'error');
-            return;
-        }
-
-        isRunning = true;
-        repeatEnabled = enableRepeat;
-        currentRepeat = 0;
-
-        if (window.g4lkir95_updateStatus) {
-            window.g4lkir95_updateStatus(true, 'Запуск массового сбора...');
-        }
-
-        saveSettings();
-        executeScavengingCycle();
-    }
-
-    function stopMassScavenging() {
-        isRunning = false;
-        repeatEnabled = false;
-        
-        if (repeatTimer) {
-            clearTimeout(repeatTimer);
-            repeatTimer = null;
-        }
-
-        if (window.g4lkir95_updateStatus) {
-            window.g4lkir95_updateStatus(false, 'Выполнение остановлено');
-        }
-
-        showNotification('Массовый сбор остановлен', 'info');
-    }
-
-    function executeScavengingCycle() {
-        if (!isRunning) return;
-
-        currentRepeat++;
-        const totalRepeats = repeatEnabled ? repeatCount : 1;
-
-        if (window.g4lkir95_updateProgress) {
-            window.g4lkir95_updateProgress(`Выполняется повтор ${currentRepeat} из ${totalRepeats}`);
-        }
-
-        console.log(`G4lKir95: Запуск массового сбора ${currentRepeat}/${totalRepeats}`);
-
-        // Запускаем основную логику Sophie
-        const success = readyToSend();
-        
-        if (!success) {
-            stopMassScavenging();
-            return;
-        }
-    }
-
-    function scheduleNextRun() {
-        if (repeatEnabled && currentRepeat < repeatCount && isRunning) {
-            const intervalMs = repeatInterval * 60 * 1000;
-            
-            if (window.g4lkir95_updateProgress) {
-                window.g4lkir95_updateProgress(`Следующий запуск через ${repeatInterval} минут...`);
-            }
-
-            repeatTimer = setTimeout(() => {
-                executeScavengingCycle();
-            }, intervalMs);
-        } else {
-            // Завершаем выполнение
-            isRunning = false;
-            if (window.g4lkir95_updateStatus) {
-                window.g4lkir95_updateStatus(false, 
-                    repeatEnabled ? `Все повторы завершены (${repeatCount})` : 'Однократное выполнение завершено'
-                );
-            }
-            
-            if (repeatEnabled) {
-                showNotification(`Массовый сбор завершен! Выполнено повторов: ${currentRepeat}`, 'success');
-            } else {
-                showNotification('Массовый сбор завершен!', 'success');
-            }
-        }
-    }
-
-    // ========== ИНТЕРФЕЙС G4LKIR95 ==========
-
+    // Основной интерфейс G4lKir95
     function createInterface() {
-        const existingPanel = document.querySelector('.g4lkir95-panel');
-        if (existingPanel) existingPanel.remove();
+        const existing = document.querySelector('.g4lkir95-panel');
+        if (existing) existing.remove();
 
         const panel = document.createElement('div');
         panel.className = 'g4lkir95-panel';
         panel.innerHTML = `
             <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
-            <div class="g4lkir95-header">G4lKir95 Mass Scavenging v2.0</div>
+            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging</div>
             
             <div class="g4lkir95-section">
                 <div class="g4lkir95-section-title">⚙️ Настройки повторного запуска</div>
-                
                 <div class="g4lkir95-input-group">
                     <div class="g4lkir95-row">
                         <input type="checkbox" id="repeatEnabled" class="g4lkir95-checkbox">
                         <label for="repeatEnabled">Включить повторный запуск</label>
                     </div>
                 </div>
-                
                 <div class="g4lkir95-input-group">
                     <label class="g4lkir95-label">Количество повторов:</label>
                     <input type="number" id="repeatCount" class="g4lkir95-input" min="1" max="100" value="${repeatCount}">
                 </div>
-                
                 <div class="g4lkir95-input-group">
                     <label class="g4lkir95-label">Интервал (минуты):</label>
                     <input type="number" id="repeatInterval" class="g4lkir95-input" min="1" max="1440" value="${repeatInterval}">
                 </div>
-                
-                <div id="statusSection" class="g4lkir95-status g4lkir95-status-inactive">
-                    Готов к работе
-                </div>
+                <div id="statusSection" class="g4lkir95-status g4lkir95-status-inactive">Готов к работе</div>
             </div>
 
             <div class="g4lkir95-section">
-                <div class="g4lkir95-section-title">🚀 Управление запуском</div>
-                
-                <button class="g4lkir95-button g4lkir95-button-success" id="startSingle">
-                    ▶️ Запустить один раз
-                </button>
-                
-                <button class="g4lkir95-button g4lkir95-button-warning" id="startRepeat">
-                    🔄 Запустить с повторами
-                </button>
-                
-                <button class="g4lkir95-button" id="stopButton" style="display: none;">
-                    ⏹️ Остановить
-                </button>
-
-                <button class="g4lkir95-button" onclick="createSophieInterface()">
-                    ⚙️ Настройки сбора
-                </button>
+                <div class="g4lkir95-section-title">🎮 Управление запуском</div>
+                <button class="g4lkir95-button g4lkir95-button-success" id="startSingle">▶️ Запустить один раз</button>
+                <button class="g4lkir95-button g4lkir95-button-warning" id="startRepeat">🔄 Запустить с повторами</button>
+                <button class="g4lkir95-button" id="stopButton" style="display: none;">⏹️ Остановить</button>
+                <button class="g4lkir95-button" onclick="createSophieInterface()">⚙️ Настройки сбора</button>
             </div>
 
             <div class="g4lkir95-section">
                 <div class="g4lkir95-section-title">📊 Статус выполнения</div>
-                <div id="progressInfo" style="font-size: 11px; text-align: center; color: #bdc3c7;">
-                    Ожидание запуска...
-                </div>
+                <div id="progressInfo" style="font-size: 11px; text-align: center; color: #bdc3c7;">Ожидание запуска...</div>
             </div>
         `;
 
@@ -718,6 +450,81 @@
         };
     }
 
+    function startMassScavenging(enableRepeat = false) {
+        if (isRunning) {
+            showNotification('Скрипт уже выполняется!', 'error');
+            return;
+        }
+
+        isRunning = true;
+        repeatEnabled = enableRepeat;
+        currentRepeat = 0;
+
+        if (window.g4lkir95_updateStatus) {
+            window.g4lkir95_updateStatus(true, 'Запуск массового сбора...');
+        }
+
+        saveSettings();
+        executeScavengingCycle();
+    }
+
+    function stopMassScavenging() {
+        isRunning = false;
+        repeatEnabled = false;
+        
+        if (repeatTimer) {
+            clearTimeout(repeatTimer);
+            repeatTimer = null;
+        }
+
+        if (window.g4lkir95_updateStatus) {
+            window.g4lkir95_updateStatus(false, 'Выполнение остановлено');
+        }
+
+        showNotification('Массовый сбор остановлен', 'info');
+    }
+
+    function executeScavengingCycle() {
+        if (!isRunning) return;
+
+        currentRepeat++;
+        const totalRepeats = repeatEnabled ? repeatCount : 1;
+
+        if (window.g4lkir95_updateProgress) {
+            window.g4lkir95_updateProgress(`Выполняется повтор ${currentRepeat} из ${totalRepeats}`);
+        }
+
+        // Эмуляция процесса сбора
+        setTimeout(() => {
+            showNotification(`Повтор ${currentRepeat}/${totalRepeats} завершен`, 'success');
+            if (window.g4lkir95_updateProgress) {
+                window.g4lkir95_updateProgress(`Повтор ${currentRepeat} завершен`);
+            }
+            scheduleNextRun();
+        }, 2000);
+    }
+
+    function scheduleNextRun() {
+        if (repeatEnabled && currentRepeat < repeatCount && isRunning) {
+            const intervalMs = repeatInterval * 60 * 1000;
+            
+            if (window.g4lkir95_updateProgress) {
+                window.g4lkir95_updateProgress(`Следующий запуск через ${repeatInterval} минут...`);
+            }
+
+            repeatTimer = setTimeout(() => {
+                executeScavengingCycle();
+            }, intervalMs);
+        } else {
+            isRunning = false;
+            if (window.g4lkir95_updateStatus) {
+                window.g4lkir95_updateStatus(false, 
+                    repeatEnabled ? `Все повторы завершены (${repeatCount})` : 'Однократное выполнение завершено'
+                );
+            }
+        }
+    }
+
     function addLaunchButton() {
         if (!document.querySelector('.g4lkir95-launch-btn')) {
             const launchBtn = document.createElement('button');
@@ -729,31 +536,6 @@
         }
     }
 
-    // ========== ИНИЦИАЛИЗАЦИЯ ==========
-
-    function init() {
-        console.log('G4lKir95 Mass Scavenging v2.0.1 loaded');
-        
-        // Добавляем стили
-        const styleSheet = document.createElement('style');
-        styleSheet.textContent = styles;
-        document.head.appendChild(styleSheet);
-
-        // Загружаем настройки
-        loadSettings();
-
-        // Добавляем кнопку запуска
-        addLaunchButton();
-
-        // Периодически проверяем кнопку
-        setInterval(addLaunchButton, 3000);
-
-        showNotification('G4lKir95 Mass Scavenging v2.0.1 активирован!', 'success');
-        
-        // Автоматически создаем интерфейс Sophie
-        setTimeout(createSophieInterface, 1000);
-    }
-
     // Глобальные функции
     window.closeWindow = function(title) {
         const element = document.getElementById(title);
@@ -761,8 +543,25 @@
     };
 
     window.createSophieInterface = createSophieInterface;
+    window.saveSophieSettings = saveSophieSettings;
+    window.resetSophieSettings = resetSophieSettings;
 
-    // Запуск
+    // Инициализация
+    function init() {
+        console.log('G4lKir95 Mass Scavenging v2.0.2 loaded');
+        
+        const styleSheet = document.createElement('style');
+        styleSheet.textContent = styles;
+        document.head.appendChild(styleSheet);
+
+        loadSettings();
+        addLaunchButton();
+        setInterval(addLaunchButton, 3000);
+
+        showNotification('G4lKir95 Mass Scavenging v2.0.2 активирован!', 'success');
+        setTimeout(createSophieInterface, 500);
+    }
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
