@@ -94,72 +94,6 @@ if (game_data.locale == "ro_RO") {
         "Rulează cu repetări"
     ]
 }
-if (game_data.locale == "ar_AE") {
-    //arabic server
-    langShinko = [
-        "РЁВ§Р©вЂћРЁВ§РЁС”РЁВ§РЁВ±РЁВ§РЁР„",
-        "РЁВ§РЁВ®РЁР„РЁВ§РЁВ± РЁВ§Р©вЂћР©в‚¬РЁВРЁР‡РЁВ§РЁР„ РЁВ§Р©вЂћР©вЂ¦РЁС–РЁР„РЁВ®РЁР‡Р©вЂ¦РЁВ© Р©РѓР©вЂ° РЁВ§Р©вЂћРЁВ§РЁС”РЁВ§РЁВ±РЁВ§РЁР„",
-        "РЁВ§РЁВ®РЁР„РЁВ§РЁВ± РЁВ§Р©вЂ Р©в‚¬РЁВ§РЁв„–   РЁВ§Р©вЂћРЁВ§РЁС”РЁВ§РЁВ±РЁВ§РЁР„ РЁВ§Р©вЂћР©вЂ¦РЁС–РЁР„РЁВ®РЁР‡Р©вЂ¦РЁВ© ",
-        " Р©вЂ¦РЁВ§ РЁВ§Р©вЂћР©вЂ¦РЁР‡Р©вЂЎ РЁВ§Р©вЂћР©вЂ¦РЁР‡Р©вЂЎ РЁВ§Р©вЂћРЁР†Р©вЂ¦Р©вЂ Р©Р‰Р©вЂЎ РЁВ§Р©вЂћР©вЂ¦РЁВ±РЁВ§РЁР‡ РЁВ§РЁВ±РЁС–РЁВ§Р©вЂћ РЁВ§Р©вЂћРЁВ§РЁС”РЁВ§РЁВ±РЁВ§РЁР„ РЁРЃР©вЂЎРЁВ§",
-        "РЁВ¶РЁв„– РЁВ§РЁВ§Р©вЂћР©вЂ¦РЁР‡Р©вЂЎ Р©вЂЎР©вЂ РЁВ§",
-        "РЁВРЁС–РЁВ§РЁРЃ РЁВ§Р©вЂћР©вЂ¦РЁР‡Р©вЂЎ Р©вЂћР©С“Р©вЂћ РЁВµР©РѓРЁВР©вЂЎ ",
-        "Creator: ",
-        "РЁВ§Р©вЂћРЁВ§РЁС”РЁВ§РЁВ±РЁВ§РЁР„ : РЁР„РЁВ±РЁС–Р©вЂћ Р©вЂћР©С“Р©вЂћ 50 Р©вЂљРЁВ±Р©Р‰Р©вЂЎ РЁв„–Р©вЂћР©вЂ° РЁВРЁР‡Р©вЂ° ",
-        " РЁР„РЁТ‘РЁС”Р©Р‰Р©вЂћ РЁВ§Р©вЂћР©вЂ¦РЁВ¬Р©вЂ¦Р©в‚¬РЁв„–РЁВ© ",
-        "РЁВ§РЁВ±ШЇЩ€Ш№Ш§ШЄ Ш§Щ„ШҐШ№Ш§ШЇШ©",
-        "ШЄШґШєЩЉЩ„ Ш§Щ„ШҐШ№Ш§ШЇШ©",
-        "Ш№ШЇШЇ Ш§Щ„ШЄЩѓШ±Ш§Ш±:",
-        "Ш§Щ„ЩЃШЄШ±Ш© (ШЇЩ‚Ш§Ш¦Щ‚):",
-        "Ш§Щ„ШЄЩѓШ±Ш§Ш± Ш§Щ„Ш­Ш§Щ„ЩЉ:",
-        "Щ…Щ†",
-        "ШҐШ¬Ш±Ш§ШЎ Щ…Ш±Ш© Щ€Ш§Ш­ШЇШ©",
-        "ШҐШ¬Ш±Ш§ШЎ Щ…ЩѓШ±Ш±"
-    ]
-}
-if (game_data.locale == "el_GR") {
-    //greek server
-    langShinko = [
-        "РћСљРћВ±РћВ¶Рћв„–РћС”РћВ® РџС“РћВ¬РџРѓРџвЂ°РџС“РћВ·",
-        "РћвЂўРџР‚Рћв„–РћВ»РћВРћС•РџвЂћРћВµ РџвЂћРћв„–РџвЂљ РћСРћС—РћР…РћВ¬РћТ‘РћВµРџвЂљ РћСРћВµ РџвЂћРћв„–РџвЂљ РћС—РџР‚РћС—РћР‡РћВµРџвЂљ РћС‘РћВ± РћС”РћВ¬РћР…РћВµРџвЂћРћВµ РџС“РћВ¬РџРѓРџвЂ°РџС“РћВ·",
-        "РћвЂўРџР‚Рћв„–РћВ»РћВРћС•РџвЂћРћВµ РћВµРџР‚РћР‡РџР‚РћВµРћТ‘РћВ± РџС“РћВ¬РџРѓРџвЂ°РџС“РћВ·РџвЂљ РџР‚РћС—РџвЂ¦ РћС‘РћВ± РџвЂЎРџРѓРћВ·РџС“Рћв„–РћСРћС—РџР‚РћС—Рћв„–РћВ·РћС‘РћС—РџРЊРћР…",
-        "РћВ§РџРѓРџРЉРћР…РћС—РџвЂљ РћР€РћВ¬РџРѓРџвЂ°РџС“РћВ·РџвЂљ (РћРЏРџРѓРћВµРџвЂљ.РћвЂєРћВµРџР‚РџвЂћРћВ¬)",
-        "РћВ§РџРѓРџРЉРћР…РћС—РџвЂљ",
-        "РћТђРџР‚РћС—РћВ»РџРЉРћС–Рћв„–РџС“РћВµ РџвЂЎРџРѓРџРЉРћР…РћС—РџвЂ¦РџвЂљ РџС“РћВ¬РџРѓРџвЂ°РџС“РћВ·РџвЂљ РћС–Рћв„–РћВ± РћС”РћВ¬РћС‘РћВµ РџС“РћВµРћВ»РћР‡РћТ‘РћВ±.",
-        "РћвЂќРћВ·РћСРћв„–РћС—РџвЂ¦РџРѓРћС–РџРЉРџвЂљ: ",
-        "РћСљРћВ±РћВ¶Рћв„–РћС”РћВ® РџС“РћВ¬РџРѓРџвЂ°РџС“РћВ·: РћвЂРџР‚РћС—РџС“РџвЂћРћС—РћВ»РћВ® РћВ±РћР…РћВ± 50 РџвЂЎРџвЂ°РџРѓРћв„–РћВ¬",
-        "РћвЂРџР‚РћС—РџС“РџвЂћРћС—РћВ»РћВ® РћС—РћСРћВ¬РћТ‘РћВ±РџвЂљ ",
-        "РЎОµ ОѕП…ОЇО»О№ПѓОјО± ОµПЂО±ОЅО±О»О·ПˆО·П‚",
-        "О•ОЅОµПЃОіОїПЂОїОЇО·ПѓО· ОµПЂО±ОЅО±О»О·ПˆО·П‚",
-        "О‘ПЃО№ОёОјОїП‚ ОµПЂО±ОЅО±О»О®П€ОµП‰ОЅ:",
-        "О”О№О¬ПѓП„О·ОјО± (О»ОµПЂП„О¬):",
-        "О¤ПЃО­П‡ОїП…ПѓО± ОµПЂО±ОЅО¬О»О·ПˆО·:",
-        "О±ПЂПЊ",
-        "О•ОєП„ОµО»О­ПѓП„Оµ ОјОЇО± О¶П‰ОЅП„О±ОЅО®",
-        "О•ОєП„ОµО»О­ПѓП„Оµ ОјОµ ОµПЂО±ОЅО±О»О®П€ОµО№П‚"
-    ]
-}
-if (game_data.locale == "nl_NL") {
-    //dutch server
-    langShinko = [
-        "Massa rooftochten",
-        "Kies welke troeptypes je wil mee roven, sleep om prioriteit te ordenen",
-        "Kies categorieР“В«n die je wil gebruiken",
-        "Wanneer wil je dat je rooftochten terug zijn?",
-        "Looptijd hier invullen",
-        "Bereken rooftochten voor iedere pagina",
-        "Scripter: ",
-        "Massa rooftochten: verstuur per 50 dorpen",
-        "Verstuur groep ",
-        "Herhaal instellingen",
-        "Herhaling inschakelen",
-        "Aantal herhalingen:",
-        "Interval (minuten):",
-        "Huidige herhaling:",
-        "van",
-        "Eenmalig uitvoeren",
-        "Uitvoeren met herhalingen"
-    ]
-}
 if (game_data.locale == "it_IT") {
     //Italian server
     langShinko = [
@@ -1353,18 +1287,243 @@ function sendGroup(groupNr, premiumEnabled) {
 
 // Добавляем недостающие функции для чистоты кода
 function calculateHaulCategories(data) {
-    // [Реализация функции calculateHaulCategories из оригинального кода]
-    // ... (полный код функции)
+    //check if village has rally point
+    if (data.has_rally_point == true) {
+        console.log("can scavenge");
+		
+
+        var savedFarmCoords = localStorage.getItem("farmCoords");
+        var farmCoords = [];
+        var isFarmVillage = false;
+        
+        if (savedFarmCoords && savedFarmCoords.trim() !== "") {
+            farmCoords = savedFarmCoords.split(' ');
+            var currentVillageCoords = data.village_name.match(/[0-9]{3}\|[0-9]{3}/);
+            
+            if (currentVillageCoords) {
+                currentVillageCoords = currentVillageCoords[0];
+                isFarmVillage = farmCoords.includes(currentVillageCoords);
+                
+                if (isFarmVillage) {
+                    console.log(`Р”РµСЂРµРІРЅСЏ ${data.village_name} РІ СЃРїРёСЃРєРµ С„Р°СЂРјР° - Р»РµРіРєРёРµ РєРѕРЅРё РёРіРЅРѕСЂРёСЂСѓСЋС‚СЃСЏ`);
+                }
+            }
+        }
+
+		
+        var troopsAllowed = {};
+        for (key in troopTypeEnabled) {
+            if (troopTypeEnabled[key] == true) {
+                // ==== РР—РњР•РќР•РќРР•: Р”Р»СЏ farm-РґРµСЂРµРІРµРЅСЊ РёРіРЅРѕСЂРёСЂСѓРµРј light ====
+                if (isFarmVillage && key == "light") {
+                    troopsAllowed[key] = 0; // РРіРЅРѕСЂРёСЂСѓРµРј Р»РµРіРєРёС… РєРѕРЅРµР№
+                    console.log("Р›РµРіРєРёРµ РєРѕРЅРё РїСЂРѕРёРіРЅРѕСЂРёСЂРѕРІР°РЅС‹ РґР»СЏ С„Р°СЂРј-РґРµСЂРµРІРЅРё");
+                } else if (data.unit_counts_home[key] - keepHome[key] > 0) {
+                    troopsAllowed[key] = data.unit_counts_home[key] - keepHome[key];
+                }
+                else {
+                    troopsAllowed[key] = 0;
+                }
+            }
+        }
+		
+        var unitType = {
+            "spear": 'def',
+            "sword": 'def',
+            "axe": 'off',
+            "archer": 'def',
+            "light": 'off',
+            "marcher": 'off',
+            "heavy": 'def',
+        }
+
+        var typeCount = { 'off': 0, 'def': 0 };
+
+        for (var prop in troopsAllowed) {
+            typeCount[unitType[prop]] = typeCount[unitType[prop]] + troopsAllowed[prop];
+        }
+
+        totalLoot = 0;
+
+        //check what the max possible loot is
+        for (key in troopsAllowed) {
+            if (key == "spear") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 25);
+            if (key == "sword") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 15);
+            if (key == "axe") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 10);
+            if (key == "archer") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 10);
+            if (key == "light") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 80);
+            if (key == "marcher") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 50);
+            if (key == "heavy") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 50);
+            if (key == "knight") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 100);
+        }
+        console.log("Loot possible from this village: " + totalLoot);
+        if (totalLoot == 0) {
+            //can't loot from here, end
+            return;
+        }
+        if (typeCount.off > typeCount.def) {
+            haul = parseInt(((time.off * 3600) / duration_factor - duration_initial_seconds) ** (1 / (duration_exponent)) / 100) ** (1 / 2);
+        } else {
+            haul = parseInt(((time.def * 3600) / duration_factor - duration_initial_seconds) ** (1 / (duration_exponent)) / 100) ** (1 / 2);
+        }
+
+        haulCategoryRate = {};
+        //check which categories are enabled
+
+		if (data.options[1].scavenging_squad != null || data.options[2].scavenging_squad != null || data.options[3].scavenging_squad != null || data.options[4].scavenging_squad != null)
+		{
+			console.log("РџРѕРёСЃРєРё РµС‰С‘ РЅРµ Р·Р°РєРѕРЅС‡РµРЅС‹");
+		}
+		else
+		{
+			if (data.options[1].is_locked == true || data.options[1].scavenging_squad != null) {
+				haulCategoryRate[1] = 0;
+			} else {
+				haulCategoryRate[1] = haul / 0.1;
+			}
+			if (data.options[2].is_locked == true || data.options[2].scavenging_squad != null) {
+				haulCategoryRate[2] = 0;
+			} else {
+				haulCategoryRate[2] = haul / 0.25;
+			}
+			if (data.options[3].is_locked == true || data.options[3].scavenging_squad != null) {
+				haulCategoryRate[3] = 0;
+			} else {
+				haulCategoryRate[3] = haul / 0.50;
+			}
+			if (data.options[4].is_locked == true || data.options[4].scavenging_squad != null) {
+				haulCategoryRate[4] = 0;
+			} else {
+				haulCategoryRate[4] = haul / 0.75;
+			}
+		}
+        console.log(haulCategoryRate);
+
+        for (var i = 0; i < enabledCategories.length; i++) {
+            if (enabledCategories[i] == false) haulCategoryRate[i + 1] = 0;
+        }
+
+        totalHaul = haulCategoryRate[1] + haulCategoryRate[2] + haulCategoryRate[3] + haulCategoryRate[4];
+
+        unitsReadyForSend = calculateUnitsPerVillage(troopsAllowed);
+
+        for (var k = 0; k < Object.keys(unitsReadyForSend).length; k++) {
+            candidate_squad = { "unit_counts": unitsReadyForSend[k], "carry_max": 9999999999 };
+            if (data.options[k + 1].is_locked == false) {
+                squad_requests.push({ "village_id": data.village_id, "candidate_squad": candidate_squad, "option_id": k + 1, "use_premium": false })
+                squad_requests_premium.push({ "village_id": data.village_id, "candidate_squad": candidate_squad, "option_id": k + 1, "use_premium": true })
+
+            }
+        }
+    }
+    else {
+        console.log("no rally point");
+    }
 }
 
 function enableCorrectTroopTypes() {
-    // [Реализация функции enableCorrectTroopTypes из оригинального кода]
-    // ... (полный код функции)
+    worldUnits = game_data.units;
+    for (var i = 0; i < worldUnits.length; i++) {
+        if (worldUnits[i] != "militia" && worldUnits[i] != "snob" && worldUnits[i] != "ram" && worldUnits[i] != "catapult" && worldUnits[i] != "spy") {
+            if (troopTypeEnabled[worldUnits[i]] == true) $(`#${worldUnits[i]}`).prop("checked", true);
+        }
+    }
+    for (var i = 0; i < categoryEnabled.length + 1; i++) {
+        if (categoryEnabled[i] == true) {
+            $(`#category${i + 1}`).prop("checked", true);
+        }
+    }
 }
 
 function calculateUnitsPerVillage(troopsAllowed) {
-    // [Реализация функции calculateUnitsPerVillage из оригинального кода]
-    // ... (полный код функции)
+    var unitHaul = {
+        "spear": 25,
+        "sword": 15,
+        "axe": 10,
+        "archer": 10,
+        "light": 80,
+        "marcher": 50,
+        "heavy": 50,
+        "knight": 100
+    };
+    //calculate HERE :D
+    console.log(troopsAllowed)
+    unitsReadyForSend = {};
+    unitsReadyForSend[0] = {};
+    unitsReadyForSend[1] = {};
+    unitsReadyForSend[2] = {};
+    unitsReadyForSend[3] = {};
+    if (totalLoot > totalHaul) {
+        //too many units
+        console.log("too many units")
+        //prioritise higher category first
+        if (version != "old") {
+            for (var j = 3; j >= 0; j--) {
+                var reach = haulCategoryRate[j + 1];
+                sendOrder.forEach((unit) => {
+                    if (troopsAllowed.hasOwnProperty(unit) && reach > 0) {
+                        var amountNeeded = Math.floor(reach / unitHaul[unit]);
+
+                        if (amountNeeded > troopsAllowed[unit]) {
+                            unitsReadyForSend[j][unit] = troopsAllowed[unit];
+                            reach = reach - (troopsAllowed[unit] * unitHaul[unit]);
+                            troopsAllowed[unit] = 0;
+                        } else {
+                            unitsReadyForSend[j][unit] = amountNeeded;
+                            reach = 0;
+                            troopsAllowed[unit] = troopsAllowed[unit] - amountNeeded;
+                        }
+                    }
+                });
+            }
+        }
+        else {
+            for (var j = 0; j < 4; j++) {
+                for (key in troopsAllowed) {
+                    unitsReadyForSend[j][key] = Math.floor((haulCategoryRate[j + 1] * (troopsAllowed[key] / totalLoot)));
+                }
+            }
+
+        }
+    }
+    else {
+        //not enough units, spread evenly
+        troopNumber = 0;
+        for (key in troopsAllowed) {
+            troopNumber += troopsAllowed[key];
+        }
+        console.log(troopNumber);
+        if (prioritiseHighCat != true && troopNumber > 130) {
+            for (var j = 0; j < 4; j++) {
+                console.log("not enough units, but even balance")
+                for (key in troopsAllowed) {
+                    unitsReadyForSend[j][key] = Math.floor((totalLoot / totalHaul * haulCategoryRate[j + 1]) * (troopsAllowed[key] / totalLoot));
+                }
+            }
+        }
+        else {
+            //prioritise higher category first
+            for (var j = 3; j >= 0; j--) {
+                var reach = haulCategoryRate[j + 1];
+                sendOrder.forEach((unit) => {
+                    if (troopsAllowed.hasOwnProperty(unit) && reach > 0) {
+                        var amountNeeded = Math.floor(reach / unitHaul[unit]);
+
+                        if (amountNeeded > troopsAllowed[unit]) {
+                            unitsReadyForSend[j][unit] = troopsAllowed[unit];
+                            reach = reach - (troopsAllowed[unit] * unitHaul[unit]);
+                            troopsAllowed[unit] = 0;
+                        } else {
+                            unitsReadyForSend[j][unit] = amountNeeded;
+                            reach = 0;
+                            troopsAllowed[unit] = troopsAllowed[unit] - amountNeeded;
+                        }
+                    }
+                });
+            }
+        }
+    }
+    return unitsReadyForSend;
 }
 
 function resetSettings() {
