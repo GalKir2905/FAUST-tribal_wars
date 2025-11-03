@@ -1678,6 +1678,39 @@
     }
     }
 
+    
+    function analyzeInterface(row) {
+        addDebugLog('=== АНАЛИЗ ИНТЕРФЕЙСА ===', 'info');
+        
+        // Анализируем все элементы в строке
+        const allElements = row.querySelectorAll('*');
+        addDebugLog(`Всего элементов в строке: ${allElements.length}`, 'info');
+        
+        // Логируем структуру
+        allElements.forEach((element, index) => {
+            const tag = element.tagName.toLowerCase();
+            const text = (element.textContent || '').trim().substring(0, 50);
+            const className = element.className || '';
+            const id = element.id || '';
+            
+            if (text || className || id) {
+                addDebugLog(`Элемент ${index}: <${tag}> class="${className}" id="${id}" text="${text}"`, 'info');
+            }
+        });
+        
+        // Анализируем формы
+        const forms = row.querySelectorAll('form');
+        forms.forEach((form, index) => {
+            addDebugLog(`Форма ${index}: action="${form.action}" method="${form.method}"`, 'info');
+        });
+        
+        // Анализируем inputs
+        const inputs = row.querySelectorAll('input');
+        inputs.forEach((input, index) => {
+            addDebugLog(`Input ${index}: type="${input.type}" name="${input.name}" value="${input.value}"`, 'info');
+        });
+    }
+
     function isOptionForCategory(optionText, categoryId) {
         const text = optionText.toLowerCase();
         
