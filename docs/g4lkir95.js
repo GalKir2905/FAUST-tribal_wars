@@ -449,6 +449,7 @@
             }
         });
         
+        // Сохраняем настройки категорий из чекбоксов
         for (let i = 1; i <= 4; i++) {
             const checkbox = document.getElementById('cat_' + i);
             if (checkbox) {
@@ -456,9 +457,26 @@
             }
         }
         
+        // Сохраняем настройку приоритета
         const priorityCheckbox = document.getElementById('priority_high');
         if (priorityCheckbox) {
             prioritiseHighCat = priorityCheckbox.checked;
+        }
+        
+        // Сохраняем настройки повторного запуска
+        const repeatEnabledCheckbox = document.getElementById('repeatEnabled');
+        if (repeatEnabledCheckbox) {
+            repeatEnabled = repeatEnabledCheckbox.checked;
+        }
+        
+        const repeatCountInput = document.getElementById('repeatCount');
+        if (repeatCountInput) {
+            repeatCount = parseInt(repeatCountInput.value) || 1;
+        }
+        
+        const repeatIntervalInput = document.getElementById('repeatInterval');
+        if (repeatIntervalInput) {
+            repeatInterval = parseInt(repeatIntervalInput.value) || 60;
         }
     }
 
@@ -599,7 +617,7 @@
         }
     }
     
-    // Новая функция для поиска строк с деревнями
+    // Функция для поиска строк с деревнями
     function findVillageRowsInContainer(container) {
         const rows = [];
         
@@ -1805,58 +1823,84 @@
                 </div>
                 <div class="units-grid" id="unitsContainer"></div>
             </div>
-
+    
             <div class="g4lkir95-section">
                 <div class="g4lkir95-section-title">📊 Категории сбора</div>
-                <div class="categories-grid">
-                    <div class="category-item ${categoryEnabled[0] ? 'selected' : ''}" onclick="toggleCategory(1)">
-                        <div class="category-name">${categoryNames[1]}</div>
-                        <input type="checkbox" id="cat_1" ${categoryEnabled[0] ? 'checked' : ''} style="display: none;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0;">
+                    <div style="display: flex; align-items: center;">
+                        <input type="checkbox" id="cat_1" ${categoryEnabled[0] ? 'checked' : ''} style="margin-right: 8px;">
+                        <label for="cat_1" style="color: white; font-size: 12px;">${categoryNames[1]}</label>
                     </div>
-                    <div class="category-item ${categoryEnabled[1] ? 'selected' : ''}" onclick="toggleCategory(2)">
-                        <div class="category-name">${categoryNames[2]}</div>
-                        <input type="checkbox" id="cat_2" ${categoryEnabled[1] ? 'checked' : ''} style="display: none;">
+                    <div style="display: flex; align-items: center;">
+                        <input type="checkbox" id="cat_2" ${categoryEnabled[1] ? 'checked' : ''} style="margin-right: 8px;">
+                        <label for="cat_2" style="color: white; font-size: 12px;">${categoryNames[2]}</label>
                     </div>
-                    <div class="category-item ${categoryEnabled[2] ? 'selected' : ''}" onclick="toggleCategory(3)">
-                        <div class="category-name">${categoryNames[3]}</div>
-                        <input type="checkbox" id="cat_3" ${categoryEnabled[2] ? 'checked' : ''} style="display: none;">
+                    <div style="display: flex; align-items: center;">
+                        <input type="checkbox" id="cat_3" ${categoryEnabled[2] ? 'checked' : ''} style="margin-right: 8px;">
+                        <label for="cat_3" style="color: white; font-size: 12px;">${categoryNames[3]}</label>
                     </div>
-                    <div class="category-item ${categoryEnabled[3] ? 'selected' : ''}" onclick="toggleCategory(4)">
-                        <div class="category-name">${categoryNames[4]}</div>
-                        <input type="checkbox" id="cat_4" ${categoryEnabled[3] ? 'checked' : ''} style="display: none;">
+                    <div style="display: flex; align-items: center;">
+                        <input type="checkbox" id="cat_4" ${categoryEnabled[3] ? 'checked' : ''} style="margin-right: 8px;">
+                        <label for="cat_4" style="color: white; font-size: 12px;">${categoryNames[4]}</label>
                     </div>
                 </div>
             </div>
-
+    
             <div class="g4lkir95-section">
-                <div class="g4lkir95-section-title">⏰ Время возвращения</div>
-                <div style="text-align: center; color: #bdc3c7; font-size: 12px;">
-                    <div>⚔️ Атакующие деревни: <b>4 часа</b></div>
-                    <div>🛡️ Защитные деревни: <b>12 часов</b></div>
-                </div>
-            </div>
-
-            <div class="g4lkir95-section">
-                <div class="g4lkir95-section-title">⚖️ Настройка приоритета</div>
+                <div class="g4lkir95-section-title">⚙️ Дополнительные настройки</div>
                 <div style="margin: 10px 0;">
                     <input type="checkbox" id="priority_high" ${prioritiseHighCat ? 'checked' : ''}>
-                    <label for="priority_high" style="color: white; margin-left: 5px;">
+                    <label for="priority_high" style="color: white; margin-left: 5px; font-size: 12px;">
                         Приоритет высших категорий
                     </label>
                 </div>
+                <div style="margin: 10px 0;">
+                    <input type="checkbox" id="repeatEnabled" ${repeatEnabled ? 'checked' : ''}>
+                    <label for="repeatEnabled" style="color: white; margin-left: 5px; font-size: 12px;">
+                        Повторный запуск
+                    </label>
+                </div>
+                <div id="repeatSettings" style="${repeatEnabled ? '' : 'display: none;'} margin: 10px 0; padding: 10px; background: #2c3e50; border-radius: 4px;">
+                    <div style="margin-bottom: 8px;">
+                        <label style="color: #bdc3c7; font-size: 11px; display: block;">Количество повторов:</label>
+                        <input type="number" id="repeatCount" value="${repeatCount}" min="1" max="100" style="width: 100%; padding: 4px; background: #34495e; color: white; border: 1px solid #7f8c8d; border-radius: 3px; font-size: 11px;">
+                    </div>
+                    <div>
+                        <label style="color: #bdc3c7; font-size: 11px; display: block;">Интервал (минуты):</label>
+                        <input type="number" id="repeatInterval" value="${repeatInterval}" min="1" max="1440" style="width: 100%; padding: 4px; background: #34495e; color: white; border: 1px solid #7f8c8d; border-radius: 3px; font-size: 11px;">
+                    </div>
+                </div>
             </div>
-
+    
             <div class="g4lkir95-section">
-                <div class="g4lkir95-section-title">💾 Управление настройками</div>
-                <button class="g4lkir95-button g4lkir95-button-success" onclick="window.g4lkir95SaveSettings()">
-                    💾 Сохранить настройки
+                <div class="g4lkir95-section-title">🎮 Управление</div>
+                <button class="g4lkir95-button g4lkir95-button-success" id="startSingle">
+                    ▶️ Запустить сбор
                 </button>
-                <button class="g4lkir95-button" onclick="window.g4lkir95ResetSettings()">
-                    🔄 Сбросить настройки
+                <button class="g4lkir95-button g4lkir95-button-warning" id="startRepeat" style="${repeatEnabled ? '' : 'display: none;'}">
+                    🔄 Запустить с повторами
                 </button>
-                <button class="g4lkir95-button" onclick="window.g4lkir95ClearLogs()">
-                    🗑️ Очистить логи
+                <button class="g4lkir95-button" id="stopButton" style="display: none;">
+                    ⏹️ Остановить
                 </button>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-top: 10px;">
+                    <button class="g4lkir95-button" onclick="window.g4lkir95SaveSettings()" style="font-size: 11px; padding: 6px;">
+                        💾 Сохранить
+                    </button>
+                    <button class="g4lkir95-button" onclick="window.g4lkir95ClearLogs()" style="font-size: 11px; padding: 6px;">
+                        🗑️ Очистить логи
+                    </button>
+                </div>
+            </div>
+    
+            <div class="g4lkir95-section">
+                <div class="g4lkir95-section-title">📊 Статус выполнения</div>
+                <div id="statusSection" class="g4lkir95-status g4lkir95-status-inactive">Готов к работе</div>
+                <div id="progressInfo" style="font-size: 11px; text-align: center; color: #bdc3c7; margin: 10px 0; padding: 8px; background: #2c3e50; border-radius: 4px;">
+                    Ожидание запуска...
+                </div>
+                <div class="g4lkir95-section-title">🔍 Логи выполнения</div>
+                <div class="debug-logs" id="debugLogs"></div>
             </div>
         `;
     }
@@ -1892,19 +1936,19 @@
         });
     }
 
-    function toggleCategory(catNumber) {
-        const checkbox = document.getElementById('cat_' + catNumber);
-        const item = document.querySelector(`[onclick="toggleCategory(${catNumber})"]`);
+    // function toggleCategory(catNumber) {
+    //     const checkbox = document.getElementById('cat_' + catNumber);
+    //     const item = document.querySelector(`[onclick="toggleCategory(${catNumber})"]`);
         
-        if (checkbox && item) {
-            checkbox.checked = !checkbox.checked;
-            if (checkbox.checked) {
-                item.classList.add('selected');
-            } else {
-                item.classList.remove('selected');
-            }
-        }
-    }
+    //     if (checkbox && item) {
+    //         checkbox.checked = !checkbox.checked;
+    //         if (checkbox.checked) {
+    //             item.classList.add('selected');
+    //         } else {
+    //             item.classList.remove('selected');
+    //         }
+    //     }
+    // }
 
     function startMassScavenging(enableRepeat) {
         if (isRunning) {
@@ -1986,75 +2030,77 @@
     function createInterface() {
         const existing = document.querySelector('.g4lkir95-panel');
         if (existing) existing.remove();
-
+    
         const panel = document.createElement('div');
         panel.className = 'g4lkir95-panel';
         panel.innerHTML = `
             <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
-            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.9.6</div>
+            <div class="g4lkir95-header">🚀 Mass Scavenging v4.9.5</div>
             ${createSettingsInterface()}
-
-            <div class="g4lkir95-section">
-                <div class="g4lkir95-section-title">⚙️ Настройки повторного запуска</div>
-                <div style="margin: 10px 0;">
-                    <input type="checkbox" id="repeatEnabled" ${repeatEnabled ? 'checked' : ''}>
-                    <label for="repeatEnabled" style="color: white; margin-left: 5px;">Включить повторный запуск</label>
-                </div>
-                <div style="margin: 10px 0;">
-                    <label style="color: #bdc3c7; font-size: 12px;">Количество повторов:</label>
-                    <input type="number" id="repeatCount" value="${repeatCount}" min="1" max="100" style="width: 100%; padding: 5px; background: #2c3e50; color: white; border: 1px solid #7f8c8d; border-radius: 3px;">
-                </div>
-                <div style="margin: 10px 0;">
-                    <label style="color: #bdc3c7; font-size: 12px;">Интервал (минуты):</label>
-                    <input type="number" id="repeatInterval" value="${repeatInterval}" min="1" max="1440" style="width: 100%; padding: 5px; background: #2c3e50; color: white; border: 1px solid #7f8c8d; border-radius: 3px;">
-                </div>
-                <div id="statusSection" class="g4lkir95-status g4lkir95-status-inactive">Готов к работе</div>
-            </div>
-
-            <div class="g4lkir95-section">
-                <div class="g4lkir95-section-title">🎮 Управление запуском</div>
-                <button class="g4lkir95-button g4lkir95-button-success" id="startSingle">▶️ Запустить РЕАЛЬНЫЙ сбор</button>
-                <button class="g4lkir95-button g4lkir95-button-warning" id="startRepeat">🔄 Запустить РЕАЛЬНЫЙ с повторами</button>
-                <button class="g4lkir95-button" id="stopButton" style="display: none;">⏹️ Остановить</button>
-            </div>
-
-            <div class="g4lkir95-section">
-                <div class="g4lkir95-section-title">📊 Статус выполнения</div>
-                <div id="progressInfo" style="font-size: 11px; text-align: center; color: #bdc3c7; margin-bottom: 10px;">Ожидание запуска...</div>
-                <div class="g4lkir95-section-title">🔍 Детальные логи выполнения</div>
-                <div class="debug-logs" id="debugLogs"></div>
-            </div>
         `;
-
+    
         document.body.appendChild(panel);
         createUnitsInterface();
         updateDebugLogsDisplay();
-
-        // Обработчики событий
+    
+        // Обработчики событий для новых элементов
         const repeatEnabledEl = panel.querySelector('#repeatEnabled');
         const repeatCountEl = panel.querySelector('#repeatCount');
         const repeatIntervalEl = panel.querySelector('#repeatInterval');
+        const repeatSettingsEl = panel.querySelector('#repeatSettings');
         const startSingleEl = panel.querySelector('#startSingle');
         const startRepeatEl = panel.querySelector('#startRepeat');
         const stopButtonEl = panel.querySelector('#stopButton');
-
+    
+        // Обработчик для переключения повторного запуска
         if (repeatEnabledEl) {
-            repeatEnabledEl.addEventListener('change', () => repeatEnabled = repeatEnabledEl.checked);
+            repeatEnabledEl.addEventListener('change', function() {
+                repeatEnabled = this.checked;
+                if (repeatSettingsEl) {
+                    repeatSettingsEl.style.display = this.checked ? 'block' : 'none';
+                }
+                if (startRepeatEl) {
+                    startRepeatEl.style.display = this.checked ? 'block' : 'none';
+                }
+            });
         }
+    
         if (repeatCountEl) {
             repeatCountEl.addEventListener('change', () => repeatCount = parseInt(repeatCountEl.value) || 1);
         }
+        
         if (repeatIntervalEl) {
             repeatIntervalEl.addEventListener('change', () => repeatInterval = parseInt(repeatIntervalEl.value) || 60);
         }
+        
         if (startSingleEl) {
             startSingleEl.addEventListener('click', () => startMassScavenging(false));
         }
+        
         if (startRepeatEl) {
             startRepeatEl.addEventListener('click', () => startMassScavenging(true));
         }
+        
         if (stopButtonEl) {
             stopButtonEl.addEventListener('click', stopMassScavenging);
+        }
+    
+        // Обработчики для чекбоксов категорий
+        for (let i = 1; i <= 4; i++) {
+            const checkbox = panel.querySelector('#cat_' + i);
+            if (checkbox) {
+                checkbox.addEventListener('change', function() {
+                    categoryEnabled[i-1] = this.checked;
+                });
+            }
+        }
+    
+        // Обработчик для приоритета категорий
+        const priorityCheckbox = panel.querySelector('#priority_high');
+        if (priorityCheckbox) {
+            priorityCheckbox.addEventListener('change', function() {
+                prioritiseHighCat = this.checked;
+            });
         }
     }
 
@@ -2070,7 +2116,7 @@
     }
 
     // ========== ГЛОБАЛЬНЫЕ ФУНКЦИИ ==========
-    window.toggleCategory = toggleCategory;
+    // window.toggleCategory = toggleCategory;
     window.g4lkir95SaveSettings = saveSophieSettings;
     window.g4lkir95ResetSettings = function() {
         if (confirm('Вы уверены, что хотите сбросить все настройки?')) {
