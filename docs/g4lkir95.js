@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         FAUST Tribal Wars Mass Scavenging v4.9.6
+// @name         FAUST Tribal Wars Mass Scavenging v4.9.7
 // @namespace    http://tampermonkey.net/
 // @version      4.9.5
 // @description  Массовый сбор ресурсов с учетом времени возвращения
@@ -438,59 +438,70 @@
     }
 
     function saveSettingsFromUI() {
-        worldUnits.forEach(unit => {
-            const backupInput = document.getElementById('backup_' + unit.id);
-            const troopCheckbox = document.getElementById('troop_' + unit.id);
-            if (backupInput) {
-                keepHome[unit.id] = parseInt(backupInput.value) || 0;
+        try {
+            // Сохраняем настройки войск
+            worldUnits.forEach(unit => {
+                const backupInput = document.getElementById('backup_' + unit.id);
+                const troopCheckbox = document.getElementById('troop_' + unit.id);
+                if (backupInput) {
+                    keepHome[unit.id] = parseInt(backupInput.value) || 0;
+                }
+                if (troopCheckbox) {
+                    troopTypesEnabled[unit.id] = troopCheckbox.checked;
+                }
+            });
+            
+            // Сохраняем настройки категорий из чекбоксов
+            for (let i = 1; i <= 4; i++) {
+                const checkbox = document.getElementById('cat_' + i);
+                if (checkbox) {
+                    categoryEnabled[i-1] = checkbox.checked;
+                }
             }
-            if (troopCheckbox) {
-                troopTypesEnabled[unit.id] = troopCheckbox.checked;
+            
+            // Сохраняем настройку приоритета
+            const priorityCheckbox = document.getElementById('priority_high');
+            if (priorityCheckbox) {
+                prioritiseHighCat = priorityCheckbox.checked;
             }
-        });
-        
-        // Сохраняем настройки категорий из чекбоксов
-        for (let i = 1; i <= 4; i++) {
-            const checkbox = document.getElementById('cat_' + i);
-            if (checkbox) {
-                categoryEnabled[i-1] = checkbox.checked;
+            
+            // Сохраняем настройки повторного запуска
+            const repeatEnabledCheckbox = document.getElementById('repeatEnabled');
+            if (repeatEnabledCheckbox) {
+                repeatEnabled = repeatEnabledCheckbox.checked;
             }
-        }
-        
-        // Сохраняем настройку приоритета
-        const priorityCheckbox = document.getElementById('priority_high');
-        if (priorityCheckbox) {
-            prioritiseHighCat = priorityCheckbox.checked;
-        }
-        
-        // Сохраняем настройки повторного запуска
-        const repeatEnabledCheckbox = document.getElementById('repeatEnabled');
-        if (repeatEnabledCheckbox) {
-            repeatEnabled = repeatEnabledCheckbox.checked;
-        }
-        
-        const repeatCountInput = document.getElementById('repeatCount');
-        if (repeatCountInput) {
-            repeatCount = parseInt(repeatCountInput.value) || 1;
-        }
-        
-        const repeatIntervalInput = document.getElementById('repeatInterval');
-        if (repeatIntervalInput) {
-            repeatInterval = parseInt(repeatIntervalInput.value) || 60;
+            
+            const repeatCountInput = document.getElementById('repeatCount');
+            if (repeatCountInput) {
+                repeatCount = parseInt(repeatCountInput.value) || 1;
+            }
+            
+            const repeatIntervalInput = document.getElementById('repeatInterval');
+            if (repeatIntervalInput) {
+                repeatInterval = parseInt(repeatIntervalInput.value) || 60;
+            }
+            
+            addDebugLog('Настройки сохранены из интерфейса', 'success');
+        } catch (e) {
+            addDebugLog('Ошибка сохранения настроек из интерфейса: ' + e.message, 'error');
         }
     }
 
     // ========== РЕАЛЬНАЯ ЛОГИКА MASS SCAVENGING ==========
     function readyToSend() {
         addDebugLog('Запуск реального массового сбора...', 'info');
+        
+        // ВАЖНО: Сохраняем настройки перед запуском
         saveSettingsFromUI();
         
+        // Проверяем что выбраны категории
         if (!categoryEnabled.some(enabled => enabled)) {
             addDebugLog('ОШИБКА: Не выбрано ни одной категории сбора!', 'error');
-            showNotification('Выберите хотя бы одну категории сбора!', 'error');
+            showNotification('Выберите хотя бы одну категорию сбора!', 'error');
             return false;
         }
-
+    
+        // Проверяем что выбраны типы войск
         if (!Object.values(troopTypesEnabled).some(enabled => enabled)) {
             addDebugLog('ОШИБКА: Не выбран ни один тип войск для отправки!', 'error');
             showNotification('Выберите хотя бы один тип войск для отправки!', 'error');
@@ -1955,11 +1966,18 @@
             showNotification('Скрипт уже выполняется!', 'error');
             return;
         }
-
+    
         isRunning = true;
         repeatEnabled = enableRepeat;
         currentRepeat = 0;
-
+    
+        // Логируем текущие настройки для отладки
+        addDebugLog('=== ТЕКУЩИЕ НАСТРОЙКИ ===', 'info');
+        addDebugLog(`Категории: ${categoryEnabled.map((enabled, i) => enabled ? categoryNames[i+1] : null).filter(Boolean).join(', ')}`, 'info');
+        addDebugLog(`Типы войск: ${worldUnits.filter(unit => troopTypesEnabled[unit.id]).map(unit => unit.name).join(', ')}`, 'info');
+        addDebugLog(`Приоритет высших категорий: ${prioritiseHighCat}`, 'info');
+        addDebugLog(`Повторный запуск: ${repeatEnabled}`, 'info');
+    
         updateUIStatus(true, 'Запуск реального массового сбора...');
         showNotification('Запуск РЕАЛЬНОГО массового сбора...', 'info');
         
@@ -2019,6 +2037,87 @@
         }
     }
 
+    function initializeEventHandlers(panel) {
+        // Обработчики для категорий
+        for (let i = 1; i <= 4; i++) {
+            const checkbox = panel.querySelector('#cat_' + i);
+            if (checkbox) {
+                checkbox.addEventListener('change', function() {
+                    categoryEnabled[i-1] = this.checked;
+                    addDebugLog(`Категория ${i} ${this.checked ? 'включена' : 'выключена'}`, 'info');
+                });
+            }
+        }
+    
+        // Обработчик для приоритета категорий
+        const priorityCheckbox = panel.querySelector('#priority_high');
+        if (priorityCheckbox) {
+            priorityCheckbox.addEventListener('change', function() {
+                prioritiseHighCat = this.checked;
+                addDebugLog(`Приоритет высших категорий ${this.checked ? 'включен' : 'выключен'}`, 'info');
+            });
+        }
+    
+        // Обработчики для повторного запуска
+        const repeatEnabledEl = panel.querySelector('#repeatEnabled');
+        const repeatCountEl = panel.querySelector('#repeatCount');
+        const repeatIntervalEl = panel.querySelector('#repeatInterval');
+        const repeatSettingsEl = panel.querySelector('#repeatSettings');
+        const startRepeatEl = panel.querySelector('#startRepeat');
+    
+        if (repeatEnabledEl) {
+            repeatEnabledEl.addEventListener('change', function() {
+                repeatEnabled = this.checked;
+                if (repeatSettingsEl) {
+                    repeatSettingsEl.style.display = this.checked ? 'block' : 'none';
+                }
+                if (startRepeatEl) {
+                    startRepeatEl.style.display = this.checked ? 'block' : 'none';
+                }
+                addDebugLog(`Повторный запуск ${this.checked ? 'включен' : 'выключен'}`, 'info');
+            });
+        }
+    
+        if (repeatCountEl) {
+            repeatCountEl.addEventListener('change', function() {
+                repeatCount = parseInt(this.value) || 1;
+                addDebugLog(`Количество повторов установлено: ${repeatCount}`, 'info');
+            });
+        }
+        
+        if (repeatIntervalEl) {
+            repeatIntervalEl.addEventListener('change', function() {
+                repeatInterval = parseInt(this.value) || 60;
+                addDebugLog(`Интервал установлен: ${repeatInterval} минут`, 'info');
+            });
+        }
+    
+        // Обработчики для кнопок управления
+        const startSingleEl = panel.querySelector('#startSingle');
+        const stopButtonEl = panel.querySelector('#stopButton');
+    
+        if (startSingleEl) {
+            startSingleEl.addEventListener('click', function() {
+                addDebugLog('Запуск одиночного сбора...', 'info');
+                startMassScavenging(false);
+            });
+        }
+        
+        if (startRepeatEl) {
+            startRepeatEl.addEventListener('click', function() {
+                addDebugLog('Запуск сбора с повторами...', 'info');
+                startMassScavenging(true);
+            });
+        }
+        
+        if (stopButtonEl) {
+            stopButtonEl.addEventListener('click', function() {
+                addDebugLog('Остановка сбора...', 'info');
+                stopMassScavenging();
+            });
+        }
+    }
+
     function updateProgress(message) {
         const progressInfo = document.querySelector('#progressInfo');
         if (progressInfo) {
@@ -2043,65 +2142,8 @@
         createUnitsInterface();
         updateDebugLogsDisplay();
     
-        // Обработчики событий для новых элементов
-        const repeatEnabledEl = panel.querySelector('#repeatEnabled');
-        const repeatCountEl = panel.querySelector('#repeatCount');
-        const repeatIntervalEl = panel.querySelector('#repeatInterval');
-        const repeatSettingsEl = panel.querySelector('#repeatSettings');
-        const startSingleEl = panel.querySelector('#startSingle');
-        const startRepeatEl = panel.querySelector('#startRepeat');
-        const stopButtonEl = panel.querySelector('#stopButton');
-    
-        // Обработчик для переключения повторного запуска
-        if (repeatEnabledEl) {
-            repeatEnabledEl.addEventListener('change', function() {
-                repeatEnabled = this.checked;
-                if (repeatSettingsEl) {
-                    repeatSettingsEl.style.display = this.checked ? 'block' : 'none';
-                }
-                if (startRepeatEl) {
-                    startRepeatEl.style.display = this.checked ? 'block' : 'none';
-                }
-            });
-        }
-    
-        if (repeatCountEl) {
-            repeatCountEl.addEventListener('change', () => repeatCount = parseInt(repeatCountEl.value) || 1);
-        }
-        
-        if (repeatIntervalEl) {
-            repeatIntervalEl.addEventListener('change', () => repeatInterval = parseInt(repeatIntervalEl.value) || 60);
-        }
-        
-        if (startSingleEl) {
-            startSingleEl.addEventListener('click', () => startMassScavenging(false));
-        }
-        
-        if (startRepeatEl) {
-            startRepeatEl.addEventListener('click', () => startMassScavenging(true));
-        }
-        
-        if (stopButtonEl) {
-            stopButtonEl.addEventListener('click', stopMassScavenging);
-        }
-    
-        // Обработчики для чекбоксов категорий
-        for (let i = 1; i <= 4; i++) {
-            const checkbox = panel.querySelector('#cat_' + i);
-            if (checkbox) {
-                checkbox.addEventListener('change', function() {
-                    categoryEnabled[i-1] = this.checked;
-                });
-            }
-        }
-    
-        // Обработчик для приоритета категорий
-        const priorityCheckbox = panel.querySelector('#priority_high');
-        if (priorityCheckbox) {
-            priorityCheckbox.addEventListener('change', function() {
-                prioritiseHighCat = this.checked;
-            });
-        }
+        // Инициализация обработчиков событий
+        initializeEventHandlers(panel);
     }
 
     function addLaunchButton() {
@@ -2132,7 +2174,7 @@
 
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
-        console.log('G4lKir95: Initializing v4.9.6 with improved interface detection...');
+        console.log('G4lKir95: Initializing v4.9.7 with improved interface detection...');
         
         // Проверяем, что мы на правильной странице
         if (window.location.href.indexOf('mode=scavenge_mass') === -1) {
@@ -2147,8 +2189,8 @@
         loadSophieSettings();
         addLaunchButton();
         setTimeout(createInterface, 500);
-        addDebugLog('G4lKir95 Mass Scavenging v4.9.6 активирован! Улучшенный поиск интерфейса.', 'success');
-        showNotification('G4lKir95 Mass Scavenging v4.9.6 активирован!', 'success');
+        addDebugLog('G4lKir95 Mass Scavenging v4.9.7 активирован! Улучшенный поиск интерфейса.', 'success');
+        showNotification('G4lKir95 Mass Scavenging v4.9.7 активирован!', 'success');
     }
 
     if (document.readyState === 'loading') {
