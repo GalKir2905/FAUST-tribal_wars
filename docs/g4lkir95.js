@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         FAUST Tribal Wars Mass Scavenging v3.5
+// @name         FAUST Tribal Wars Mass Scavenging v3.6
 // @namespace    http://tampermonkey.net/
-// @version      3.5
+// @version      3.6
 // @description  Массовый сбор ресурсов с выбором типов войск и реальной отправкой
 // @author       G4lKir95 & Sophie
 // @match        https://*.tribalwars.com.ua/game.php*
@@ -493,14 +493,8 @@
                             });
                         }
                         
-                        // Получаем информацию о категориях
-                        const options = {};
-                        for (let i = 1; i <= 4; i++) {
-                            options[i] = {
-                                is_locked: false,
-                                scavenging_squad: null
-                            };
-                        }
+                        // Получаем реальную информацию о категориях из DOM
+                        const options = getRealCategoryOptions(row);
                         
                         villages.push({
                             id: villageId,
@@ -508,10 +502,11 @@
                             has_rally_point: true,
                             units: units,
                             options: options,
-                            availableTroops: availableTroops
+                            availableTroops: availableTroops,
+                            row: row
                         });
                         
-                        console.log(`G4lKir95: Added village ${villageName} (${villageId}) with ${availableTroops} troops`);
+                        console.log(`G4lKir95: Added village ${villageName} (${villageId}) with ${availableTroops} troops`, options);
                         
                     } catch (e) {
                         console.error('Error processing row:', e);
@@ -525,6 +520,73 @@
             console.error('G4lKir95: Error getting village data:', e);
             return [];
         }
+    }
+
+    function getRealCategoryOptions(row) {
+        const options = {};
+        
+        try {
+            // Ищем кнопки категорий в строке
+            const buttons = row.querySelectorAll('button, input[type="submit"], input[type="button"]');
+            const selects = row.querySelectorAll('select');
+            
+            console.log('G4lKir95: Found buttons:', buttons.length, 'selects:', selects.length);
+            
+            // Если есть выпадающие списки - это новые категории
+            if (selects.length > 0) {
+                const select = selects[0];
+                const optionElements = select.querySelectorAll('option');
+                
+                for (let i = 1; i <= 4; i++) {
+                    options[i] = {
+                        is_locked: false,
+                        scavenging_squad: null,
+                        available: true
+                    };
+                }
+            } 
+            // Если есть кнопки - это старые категории
+            else if (buttons.length >= 4) {
+                for (let i = 1; i <= 4; i++) {
+                    const button = buttons[i-1];
+                    const isLocked = button.disabled || button.style.display === 'none' || 
+                                    button.classList.contains('disabled') ||
+                                    button.textContent.includes('Locked') ||
+                                    button.textContent.includes('Заблокировано');
+                    
+                    options[i] = {
+                        is_locked: isLocked,
+                        scavenging_squad: null,
+                        available: !isLocked
+                    };
+                    
+                    console.log(`G4lKir95: Category ${i} - locked: ${isLocked}`);
+                }
+            }
+            // Если не нашли кнопок, предполагаем что все категории доступны
+            else {
+                for (let i = 1; i <= 4; i++) {
+                    options[i] = {
+                        is_locked: false,
+                        scavenging_squad: null,
+                        available: true
+                    };
+                }
+            }
+            
+        } catch (e) {
+            console.error('G4lKir95: Error getting category options:', e);
+            // В случае ошибки предполагаем что все категории доступны
+            for (let i = 1; i <= 4; i++) {
+                options[i] = {
+                    is_locked: false,
+                    scavenging_squad: null,
+                    available: true
+                };
+            }
+        }
+        
+        return options;
     }
 
     function calculateScavengingSquads(villages) {
@@ -549,9 +611,13 @@
             availableUnits[unit.id] = Math.max(0, availableUnits[unit.id] - (keepHome[unit.id] || 0));
         });
         
+        console.log(`G4lKir95: Village ${village.name} - available units after backup:`, availableUnits);
+        
         // Для каждой активной категории создаем отряд
         for (let cat = 1; cat <= 4; cat++) {
-            if (categoryEnabled[cat-1] && village.options[cat] && !village.options[cat].is_locked) {
+            if (categoryEnabled[cat-1] && village.options[cat] && 
+                !village.options[cat].is_locked && village.options[cat].available) {
+                
                 const squad = calculateSquadForCategory(availableUnits, cat);
                 if (squad && hasUnits(squad)) {
                     squads.push({
@@ -562,9 +628,15 @@
                         village_name: village.name
                     });
                     
+                    console.log(`G4lKir95: Created squad for village ${village.name}, category ${cat}:`, squad);
+                    
                     // Уменьшаем доступные войска
                     subtractSquadFromAvailable(availableUnits, squad);
+                } else {
+                    console.log(`G4lKir95: No squad created for village ${village.name}, category ${cat} - no units available`);
                 }
+            } else {
+                console.log(`G4lKir95: Category ${cat} skipped for village ${village.name} - enabled: ${categoryEnabled[cat-1]}, locked: ${village.options[cat]?.is_locked}, available: ${village.options[cat]?.available}`);
             }
         }
         
@@ -578,6 +650,8 @@
         // Рассчитываем необходимую грузоподъемность для категории
         const requiredCapacity = calculateRequiredCapacity(category);
         
+        console.log(`G4lKir95: Category ${category} - required capacity: ${requiredCapacity}`);
+        
         // Распределяем войска для достижения требуемой грузоподъемности
         // Используем только включенные типы войск
         const enabledUnits = worldUnits.filter(unit => troopTypesEnabled[unit.id]);
@@ -587,20 +661,22 @@
         
         for (const unit of unitOrder) {
             if (availableUnits[unit.id] > 0) {
-                const needed = Math.min(
-                    availableUnits[unit.id],
-                    Math.ceil((requiredCapacity - totalCapacity) / unit.capacity)
-                );
+                const unitCapacity = unit.capacity;
+                const maxUnits = availableUnits[unit.id];
+                const neededCapacity = requiredCapacity - totalCapacity;
+                const neededUnits = Math.min(maxUnits, Math.ceil(neededCapacity / unitCapacity));
                 
-                if (needed > 0) {
-                    squad[unit.id] = needed;
-                    totalCapacity += needed * unit.capacity;
+                if (neededUnits > 0) {
+                    squad[unit.id] = neededUnits;
+                    totalCapacity += neededUnits * unitCapacity;
+                    console.log(`G4lKir95: Added ${neededUnits} ${unit.id} (capacity: ${unitCapacity}), total: ${totalCapacity}`);
                 }
             }
             
             if (totalCapacity >= requiredCapacity) break;
         }
         
+        console.log(`G4lKir95: Final squad for category ${category}:`, squad, `total capacity: ${totalCapacity}`);
         return squad;
     }
 
@@ -612,13 +688,16 @@
     }
 
     function hasUnits(squad) {
-        return Object.values(squad).some(count => count > 0);
+        const has = Object.values(squad).some(count => count > 0);
+        console.log('G4lKir95: Squad has units:', has, squad);
+        return has;
     }
 
     function subtractSquadFromAvailable(availableUnits, squad) {
         Object.keys(squad).forEach(unit => {
             availableUnits[unit] = Math.max(0, availableUnits[unit] - squad[unit]);
         });
+        console.log('G4lKir95: Available units after subtraction:', availableUnits);
     }
 
     // ========== РЕАЛЬНАЯ ОТПРАВКА ОТРЯДОВ ==========
@@ -638,22 +717,22 @@
         function sendNextSquad() {
             if (sentCount < totalSquads && isRunning) {
                 const squad = squads[sentCount];
-                showNotification(`Отправка отряда в ${squad.village_name}...`, 'info');
+                showNotification(`Отправка отряда в ${squad.village_name} (категория ${squad.option_id})...`, 'info');
                 
                 sendSingleSquad(squad).then(success => {
                     if (success) {
                         sentCount++;
                         updateProgress(`Отправлено ${sentCount}/${totalSquads} отрядов...`);
-                        showNotification(`Отряд отправлен в ${squad.village_name}`, 'success');
+                        showNotification(`✅ Отряд отправлен в ${squad.village_name}`, 'success');
                         
                         if (sentCount < totalSquads) {
                             // Задержка между отправками
-                            setTimeout(sendNextSquad, 1500);
+                            setTimeout(sendNextSquad, 2000);
                         } else {
                             completeRealScavenging();
                         }
                     } else {
-                        showNotification(`Ошибка отправки в ${squad.village_name}. Пропускаем...`, 'error');
+                        showNotification(`❌ Ошибка отправки в ${squad.village_name}. Пропускаем...`, 'error');
                         sentCount++;
                         if (sentCount < totalSquads) {
                             setTimeout(sendNextSquad, 1000);
@@ -673,43 +752,71 @@
             try {
                 console.log('G4lKir95: Sending squad to village', squad.village_id, 'category', squad.option_id, 'units:', squad.candidate_squad);
                 
-                // Создаем форму для отправки
+                // Создаем форму для отправки как в оригинальном Sophie
                 const formData = new FormData();
                 formData.append('village', squad.village_id);
                 formData.append('option', squad.option_id);
                 formData.append('ajaxaction', 'send_squads');
                 
-                // Добавляем войска в форму
+                // Добавляем войска в форму в правильном формате
                 Object.keys(squad.candidate_squad).forEach(unitType => {
                     if (squad.candidate_squad[unitType] > 0) {
                         formData.append(unitType, squad.candidate_squad[unitType]);
                     }
                 });
                 
-                // Отправляем AJAX запрос
-                fetch('/game.php?screen=scavenge_api&mode=scavenge', {
+                // Добавляем дополнительные параметры как в Sophie
+                formData.append('source', 'mass');
+                formData.append('mode', 'scavenge');
+                formData.append('screen', 'place');
+                
+                console.log('G4lKir95: Sending form data:');
+                for (let [key, value] of formData.entries()) {
+                    console.log(`  ${key}: ${value}`);
+                }
+                
+                // Отправляем AJAX запрос как в Sophie
+                fetch('/game.php?screen=scavenge_api', {
                     method: 'POST',
                     body: formData,
-                    credentials: 'include'
+                    credentials: 'include',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
                 })
-                .then(response => response.text())
+                .then(response => {
+                    console.log('G4lKir95: Response status:', response.status);
+                    return response.text();
+                })
                 .then(data => {
-                    console.log('G4lKir95: Response received:', data);
-                    // Проверяем успешность по наличию ошибок в ответе
-                    if (data && !data.includes('error') && !data.includes('Exception')) {
+                    console.log('G4lKir95: Full response:', data);
+                    
+                    // Проверяем успешность различными способами
+                    let success = false;
+                    
+                    if (data.includes('"success":true') || 
+                        data.includes('success": true') ||
+                        data.includes('"error":false') ||
+                        data.includes('success') && !data.includes('error') ||
+                        data.trim() === '') { // Пустой ответ часто означает успех
+                        success = true;
+                    }
+                    
+                    if (success) {
+                        console.log('G4lKir95: ✅ Squad sent successfully');
                         resolve(true);
                     } else {
-                        console.error('G4lKir95: Error in response:', data);
+                        console.error('G4lKir95: ❌ Error in response:', data);
                         resolve(false);
                     }
                 })
                 .catch(error => {
-                    console.error('G4lKir95: Fetch error:', error);
+                    console.error('G4lKir95: ❌ Fetch error:', error);
                     resolve(false);
                 });
                 
             } catch (error) {
-                console.error('G4lKir95: Error in sendSingleSquad:', error);
+                console.error('G4lKir95: ❌ Error in sendSingleSquad:', error);
                 resolve(false);
             }
         });
@@ -717,7 +824,7 @@
 
     function completeRealScavenging() {
         console.log('G4lKir95: REAL scavenging completed');
-        showNotification('Реальный массовый сбор завершен! Все отряды отправлены!', 'success');
+        showNotification('🎉 Реальный массовый сбор завершен! Все отряды отправлены!', 'success');
         updateProgress('Реальный массовый сбор завершен!');
         scheduleNextRun();
     }
@@ -932,7 +1039,7 @@
         panel.className = 'g4lkir95-panel';
         panel.innerHTML = `
             <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
-            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v3.5</div>
+            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v3.6</div>
             ${createSettingsInterface()}
 
             <div class="g4lkir95-section">
@@ -1023,14 +1130,14 @@
 
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
-        console.log('G4lKir95: Initializing v3.5 with REAL scavenging...');
+        console.log('G4lKir95: Initializing v3.6 with REAL scavenging...');
         const styleSheet = document.createElement('style');
         styleSheet.textContent = styles;
         document.head.appendChild(styleSheet);
         loadSophieSettings();
         addLaunchButton();
         setTimeout(createInterface, 500);
-        showNotification('G4lKir95 Mass Scavenging v3.5 активирован!', 'success');
+        showNotification('G4lKir95 Mass Scavenging v3.6 активирован!', 'success');
     }
 
     if (document.readyState === 'loading') {
