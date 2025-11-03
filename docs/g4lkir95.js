@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         FAUST Tribal Wars Mass Scavenging v4.9.5
+// @name         FAUST Tribal Wars Mass Scavenging v4.9.6
 // @namespace    http://tampermonkey.net/
 // @version      4.9.5
 // @description  Массовый сбор ресурсов с учетом времени возвращения
@@ -1031,42 +1031,82 @@
         
         addDebugLog(`Распределение ${availableTroops} войск по ${enabledTroopTypes.length} типам`, 'info');
         
-        // Распределяем пропорционально вместимости
+        // УЛУЧШЕННОЕ РАСПРЕДЕЛЕНИЕ: пропорционально вместимости с минимумом
         let remainingTroops = availableTroops;
+        const distributed = {};
         
+        // Первый проход: базовое распределение
         enabledTroopTypes.forEach((unit, index) => {
-            if (remainingTroops <= 0) return;
-            
             const share = unit.capacity / totalCapacity;
             let unitCount = Math.floor(availableTroops * share);
             
-            // Гарантируем минимум 1 юнит каждого типа
-            if (unitCount === 0 && remainingTroops > 0) {
+            // Гарантируем минимум 1 юнит каждого типа если есть достаточно войск
+            if (unitCount === 0 && remainingTroops > 0 && enabledTroopTypes.length <= remainingTroops) {
                 unitCount = 1;
             }
             
             // Не превышаем оставшиеся войска
             unitCount = Math.min(unitCount, remainingTroops);
             
-            units[unit.id] = unitCount;
-            remainingTroops -= unitCount;
-            
-            addDebugLog(`  ${unit.name}: ${unitCount} (вместимость: ${unit.capacity})`, 'info');
+            if (unitCount > 0) {
+                distributed[unit.id] = unitCount;
+                remainingTroops -= unitCount;
+                addDebugLog(`  ${unit.name}: ${unitCount} (вместимость: ${unit.capacity})`, 'info');
+            }
         });
         
-        // Если остались нераспределенные войска, добавляем к первому типу
+        // Второй проход: распределяем оставшиеся войска
+        if (remainingTroops > 0) {
+            addDebugLog(`  Осталось нераспределенных войск: ${remainingTroops}`, 'info');
+            
+            // Распределяем пропорционально вместимости
+            const totalDistributedCapacity = enabledTroopTypes.reduce((sum, unit) => {
+                return sum + ((distributed[unit.id] || 0) * unit.capacity);
+            }, 0);
+            
+            if (totalDistributedCapacity > 0) {
+                enabledTroopTypes.forEach(unit => {
+                    if (remainingTroops <= 0) return;
+                    
+                    const currentCount = distributed[unit.id] || 0;
+                    const currentCapacity = currentCount * unit.capacity;
+                    const share = currentCapacity / totalDistributedCapacity;
+                    
+                    const additional = Math.min(
+                        Math.floor(remainingTroops * share),
+                        remainingTroops
+                    );
+                    
+                    if (additional > 0) {
+                        distributed[unit.id] = currentCount + additional;
+                        remainingTroops -= additional;
+                        addDebugLog(`  Добавлено ${additional} ${unit.name}`, 'info');
+                    }
+                });
+            }
+        }
+        
+        // Если все еще остались войска, добавляем к первому типу
         if (remainingTroops > 0 && enabledTroopTypes.length > 0) {
             const firstUnit = enabledTroopTypes[0].id;
-            units[firstUnit] += remainingTroops;
+            distributed[firstUnit] = (distributed[firstUnit] || 0) + remainingTroops;
             addDebugLog(`  Добавлено ${remainingTroops} к ${getUnitName(firstUnit)}`, 'info');
         }
         
-        // Рассчитываем итоговую грузоподъемность
-        const finalCapacity = worldUnits.reduce((sum, unit) => {
-            return sum + (units[unit.id] * unit.capacity);
-        }, 0);
+        // Копируем распределенные значения в итоговый объект
+        Object.assign(units, distributed);
         
+        // Рассчитываем итоговую грузоподъемность
+        const finalCapacity = calculateTotalCapacity(units);
         addDebugLog(`Итоговая грузоподъемность: ${finalCapacity}`, 'success');
+        
+        // Логируем итоговое распределение
+        let totalDistributed = 0;
+        Object.keys(distributed).forEach(unitId => {
+            totalDistributed += distributed[unitId];
+        });
+        addDebugLog(`Всего распределено войск: ${totalDistributed}/${availableTroops}`, 
+                    totalDistributed === availableTroops ? 'success' : 'warning');
     }
 
     function getRealCategoryOptions(row) {
@@ -1149,12 +1189,132 @@
         return squads;
     }
 
+    function analyzeTroopDistribution(village) {
+        addDebugLog('=== АНАЛИЗ РАСПРЕДЕЛЕНИЯ ВОЙСК ===', 'info');
+        addDebugLog(`Деревня: ${village.name}`, 'info');
+        
+        const totalAvailable = Object.values(village.units).reduce((sum, count) => sum + count, 0);
+        addDebugLog(`Всего доступно войск: ${totalAvailable}`, 'info');
+        
+        worldUnits.forEach(unit => {
+            const count = village.units[unit.id] || 0;
+            const backup = keepHome[unit.id] || 0;
+            const enabled = troopTypesEnabled[unit.id];
+            
+            if (count > 0) {
+                addDebugLog(`  ${unit.name}: ${count} (резерв: ${backup}, включен: ${enabled ? 'да' : 'нет'})`, 
+                           enabled ? 'success' : 'warning');
+            }
+        });
+        
+        const enabledCount = worldUnits.filter(unit => troopTypesEnabled[unit.id]).length;
+        addDebugLog(`Включено типов войск: ${enabledCount}`, 'info');
+    }
+
+    function createOptimalSquad(availableUnits, maxCapacity) {
+        const squad = {};
+        let remainingCapacity = maxCapacity;
+        
+        // Используем только включенные типы войск
+        const enabledUnits = worldUnits.filter(unit => 
+            troopTypesEnabled[unit.id] && availableUnits[unit.id] > 0
+        );
+        
+        addDebugLog(`Создание оптимального отряда, максимальная емкость: ${maxCapacity}`, 'info');
+        addDebugLog(`Доступные типы войск: ${enabledUnits.map(u => `${u.name}(${availableUnits[u.id]})`).join(', ')}`, 'info');
+        
+        if (enabledUnits.length === 0) {
+            addDebugLog('❌ Нет доступных выбранных типов войск', 'error');
+            return null;
+        }
+        
+        // Стратегия: используем ВСЕ доступные войска по порядку вместимости
+        // Сначала более эффективные по грузоподъемности
+        
+        // Сортируем юниты по вместимости (от большей к меньшей)
+        const sortedByCapacity = [...enabledUnits].sort((a, b) => b.capacity - a.capacity);
+        
+        addDebugLog(`Сортировка по вместимости: ${sortedByCapacity.map(u => u.name).join(' -> ')}`, 'info');
+        
+        // Первый проход: пытаемся использовать все войска каждого типа
+        for (const unit of sortedByCapacity) {
+            if (remainingCapacity <= 0) break;
+            
+            const availableCount = availableUnits[unit.id];
+            if (availableCount <= 0) continue;
+            
+            const maxByCapacity = Math.floor(remainingCapacity / unit.capacity);
+            const unitCount = Math.min(availableCount, maxByCapacity);
+            
+            if (unitCount > 0) {
+                squad[unit.id] = unitCount;
+                remainingCapacity -= unitCount * unit.capacity;
+                addDebugLog(`  ${unit.name}: ${unitCount}/${availableCount} (емкость: ${unitCount * unit.capacity})`, 'success');
+            }
+        }
+        
+        const finalCapacity = calculateTotalCapacity(squad);
+        
+        // Второй проход: если осталась грузоподъемность, пытаемся добавить оставшиеся войска
+        if (remainingCapacity > 0) {
+            addDebugLog(`Осталось грузоподъемности: ${remainingCapacity}, пробуем добавить оставшиеся войска`, 'info');
+            
+            for (const unit of sortedByCapacity) {
+                if (remainingCapacity <= 0) break;
+                
+                const usedCount = squad[unit.id] || 0;
+                const availableCount = availableUnits[unit.id];
+                const remainingCount = availableCount - usedCount;
+                
+                if (remainingCount > 0 && unit.capacity <= remainingCapacity) {
+                    // Можем добавить хотя бы одного юнита
+                    const canAdd = Math.min(remainingCount, Math.floor(remainingCapacity / unit.capacity));
+                    if (canAdd > 0) {
+                        squad[unit.id] = (squad[unit.id] || 0) + canAdd;
+                        remainingCapacity -= canAdd * unit.capacity;
+                        addDebugLog(`  Добавлено ${canAdd} ${unit.name} (осталось ${remainingCount - canAdd})`, 'info');
+                    }
+                }
+            }
+        }
+        
+        const finalCapacityAfter = calculateTotalCapacity(squad);
+        addDebugLog(`Итоговая грузоподъемность: ${finalCapacityAfter}/${maxCapacity}`, 
+                    finalCapacityAfter > 0 ? 'success' : 'error');
+        
+        // Проверяем, что мы используем разумное количество войск
+        if (finalCapacityAfter === 0) {
+            addDebugLog('❌ Не удалось создать отряд с ненулевой грузоподъемностью', 'error');
+            return null;
+        }
+        
+        // Логируем эффективность использования
+        const efficiency = (finalCapacityAfter / maxCapacity * 100).toFixed(1);
+        addDebugLog(`Эффективность использования категории: ${efficiency}%`, 'info');
+        
+        return finalCapacityAfter > 0 ? squad : null;
+    }
+
+    function calculateRemainingUnits(originalUnits, usedSquad) {
+        const remaining = {};
+        
+        worldUnits.forEach(unit => {
+            const original = originalUnits[unit.id] || 0;
+            const used = usedSquad[unit.id] || 0;
+            remaining[unit.id] = original - used;
+        });
+        
+        return remaining;
+    }
+    
+    
     function calculateOptimalSquadsForVillage(village) {
+        analyzeTroopDistribution(village);
         const squads = [];
         const availableUnits = { ...village.units };
         
         addDebugLog(`=== ОПТИМАЛЬНЫЙ РАСЧЕТ ДЛЯ ДЕРЕВНИ: ${village.name} ===`, 'info');
-        addDebugLog(`Доступные войска: ${JSON.stringify(availableUnits)}`, 'info');
+        addDebugLog(`Исходные доступные войска: ${JSON.stringify(availableUnits)}`, 'info');
         
         // Вычитаем backup из доступных войск
         worldUnits.forEach(unit => {
@@ -1164,6 +1324,8 @@
                 addDebugLog(`  Резерв для ${getUnitName(unit.id)}: ${backup}`, 'info');
             }
         });
+        
+        addDebugLog(`Войска после резерва: ${JSON.stringify(availableUnits)}`, 'info');
         
         // Рассчитываем общую доступную грузоподъемность
         const totalAvailableCapacity = calculateTotalCapacity(availableUnits);
@@ -1185,18 +1347,23 @@
         
         addDebugLog(`Доступные категории: ${availableCategories.map(cat => village.options[cat].name).join(', ')}`, 'success');
         
-        // УПРОЩЕННАЯ СТРАТЕГИЯ: отправляем все войска в первую доступную категорию
-        // Это для тестирования - потом можно вернуть сложное распределение
+        // НОВАЯ СТРАТЕГИЯ: отправляем ВСЕ доступные войска в первую доступную категорию
+        // до максимальной грузоподъемности категории
         
         const targetCategory = availableCategories[0];
-        const targetCapacity = Math.min(totalAvailableCapacity, baseCapacities[targetCategory]);
+        const maxCategoryCapacity = baseCapacities[targetCategory];
         
         addDebugLog(`Используем категорию ${targetCategory} (${village.options[targetCategory].name})`, 'info');
-        addDebugLog(`Целевая грузоподъемность: ${targetCapacity}`, 'info');
+        addDebugLog(`Максимальная грузоподъемность категории: ${maxCategoryCapacity}`, 'info');
+        addDebugLog(`Общая доступная грузоподъемность: ${totalAvailableCapacity}`, 'info');
         
-        const squad = createSimpleSquad(availableUnits, targetCapacity);
+        // Создаем отряд используя ВСЕ доступные войска (до лимита категории)
+        const squad = createOptimalSquad(availableUnits, maxCategoryCapacity);
         
         if (squad && hasUnits(squad)) {
+            const squadCapacity = calculateTotalCapacity(squad);
+            const usedCapacityPercent = (squadCapacity / totalAvailableCapacity * 100).toFixed(1);
+            
             squads.push({
                 village_id: village.id,
                 candidate_squad: squad,
@@ -1208,6 +1375,12 @@
             
             addDebugLog(`✅ Создан отряд для "${village.name}" -> ${village.options[targetCategory].name}`, 'success');
             addDebugLog(`Состав отряда: ${JSON.stringify(squad)}`, 'info');
+            addDebugLog(`Грузоподъемность отряда: ${squadCapacity}/${maxCategoryCapacity}`, 'info');
+            addDebugLog(`Использовано войск: ${usedCapacityPercent}% от доступных`, 'info');
+            
+            // Логируем оставшиеся войска
+            const remainingUnits = calculateRemainingUnits(availableUnits, squad);
+            addDebugLog(`Оставшиеся войска в деревне: ${JSON.stringify(remainingUnits)}`, 'warning');
         } else {
             addDebugLog(`❌ Не удалось создать отряд для категории ${targetCategory}`, 'error');
         }
@@ -1818,7 +1991,7 @@
         panel.className = 'g4lkir95-panel';
         panel.innerHTML = `
             <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
-            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.9.5</div>
+            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.9.6</div>
             ${createSettingsInterface()}
 
             <div class="g4lkir95-section">
@@ -1913,7 +2086,7 @@
 
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
-        console.log('G4lKir95: Initializing v4.9.5 with improved interface detection...');
+        console.log('G4lKir95: Initializing v4.9.6 with improved interface detection...');
         
         // Проверяем, что мы на правильной странице
         if (window.location.href.indexOf('mode=scavenge_mass') === -1) {
@@ -1928,8 +2101,8 @@
         loadSophieSettings();
         addLaunchButton();
         setTimeout(createInterface, 500);
-        addDebugLog('G4lKir95 Mass Scavenging v4.9.5 активирован! Улучшенный поиск интерфейса.', 'success');
-        showNotification('G4lKir95 Mass Scavenging v4.9.5 активирован!', 'success');
+        addDebugLog('G4lKir95 Mass Scavenging v4.9.6 активирован! Улучшенный поиск интерфейса.', 'success');
+        showNotification('G4lKir95 Mass Scavenging v4.9.6 активирован!', 'success');
     }
 
     if (document.readyState === 'loading') {
