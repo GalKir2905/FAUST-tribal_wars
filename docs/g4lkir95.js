@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         FAUST Tribal Wars Mass Scavenging v4.9.1
+// @name         FAUST Tribal Wars Mass Scavenging v4.9.5
 // @namespace    http://tampermonkey.net/
-// @version      4.9
+// @version      4.9.5
 // @description  Массовый сбор ресурсов с учетом времени возвращения
 // @author       G4lKir95 & Sophie
 // @match        https://*.tribalwars.com.ua/game.php*
@@ -1075,56 +1075,50 @@
         try {
             addDebugLog('Поиск элементов управления категориями...', 'info');
             
-            // Получаем весь текст строки для анализа
-            const rowText = row.textContent || '';
-            addDebugLog(`Текст строки для анализа категорий: ${rowText.substring(0, 300)}`, 'info');
-            
-            // Проверяем наличие каждой категории по тексту
-            const categoryTexts = {
-                1: "Ленивые собиратели",
-                2: "Скромные собиратели", 
-                3: "Искусные собиратели",
-                4: "Великие собиратели"
-            };
+            const categoryElements = row.querySelectorAll('[class*="option-"]');
+            addDebugLog(`Найдено элементов категорий: ${categoryElements.length}`, 'info');
             
             for (let i = 1; i <= 4; i++) {
-                const categoryText = categoryTexts[i];
-                const hasCategory = rowText.includes(categoryText);
-                
-                // Определяем статус категории
+                let isAvailable = false;
                 let isLocked = false;
-                let isAvailable = hasCategory;
+                let isActive = false;
                 
-                // Дополнительные проверки по классам
-                const categoryElement = row.querySelector(`[class*="option-${i}"]`);
+                // Ищем основной элемент категории (не header)
+                const categoryElement = Array.from(categoryElements).find(el => 
+                    el.className.includes(`option-${i}`) && 
+                    !el.className.includes('header-option')
+                );
+                
                 if (categoryElement) {
-                    const className = categoryElement.className || '';
-                    isLocked = className.includes('locked') || 
-                              className.includes('unavailable') ||
-                              className.includes('disabled');
-                    isAvailable = !isLocked;
+                    const className = categoryElement.className;
                     
-                    addDebugLog(`Категория ${i} (${categoryText}): element found, locked=${isLocked}`, 
-                               isLocked ? 'warning' : 'success');
+                    // Определяем статус по классам
+                    isLocked = className.includes('option-locked');
+                    isActive = className.includes('option-active');
+                    isAvailable = !isLocked && (isActive || className.includes('option-inactive'));
+                    
+                    addDebugLog(`Категория ${i}: locked=${isLocked}, active=${isActive}, available=${isAvailable}`, 
+                               isAvailable ? 'success' : 'warning');
                 } else {
-                    addDebugLog(`Категория ${i} (${categoryText}): ${hasCategory ? 'text found' : 'not found'}`, 
-                               hasCategory ? 'info' : 'warning');
+                    addDebugLog(`Категория ${i}: не найдена`, 'warning');
                 }
                 
                 options[i] = {
                     is_locked: isLocked,
+                    is_active: isActive,
                     scavenging_squad: null,
                     available: isAvailable && categoryEnabled[i-1],
-                    name: categoryText
+                    name: categoryNames[i] || `Категория ${i}`
                 };
             }
             
         } catch (e) {
             addDebugLog(`Ошибка определения категорий: ${e.message}`, 'error');
-            // Резервные настройки - все категории доступны
+            // Резервные настройки
             for (let i = 1; i <= 4; i++) {
                 options[i] = {
                     is_locked: false,
+                    is_active: true,
                     scavenging_squad: null,
                     available: categoryEnabled[i-1],
                     name: categoryNames[i] || `Категория ${i}`
@@ -1318,166 +1312,6 @@
         return categories;
     }
 
-    function distributeCapacityToCategories(availableCategories, totalCapacity) {
-        const distribution = {};
-        let remainingCapacity = totalCapacity;
-        
-        // Базовые требования для категорий
-        const categoryRequirements = {
-            1: baseCapacities[1], // 1000
-            2: baseCapacities[2], // 2500  
-            3: baseCapacities[3], // 5000
-            4: baseCapacities[4]  // 10000
-        };
-        
-        // Сначала распределяем по минимальным требованиям
-        availableCategories.forEach(cat => {
-            const minRequired = categoryRequirements[cat];
-            if (remainingCapacity >= minRequired) {
-                distribution[cat] = minRequired;
-                remainingCapacity -= minRequired;
-            } else {
-                distribution[cat] = 0;
-            }
-        });
-        
-        // Если осталась грузоподъемность, распределяем ее пропорционально
-        if (remainingCapacity > 0) {
-            const totalMinCapacity = availableCategories.reduce((sum, cat) => sum + distribution[cat], 0);
-            
-            availableCategories.forEach(cat => {
-                if (distribution[cat] > 0) {
-                    const share = distribution[cat] / totalMinCapacity;
-                    const additional = Math.floor(remainingCapacity * share);
-                    distribution[cat] += additional;
-                }
-            });
-        }
-        
-        // Логируем распределение
-        addDebugLog(`Распределение грузоподъемности:`, 'info');
-        availableCategories.forEach(cat => {
-            if (distribution[cat] > 0) {
-                addDebugLog(`  ${categoryNames[cat]}: ${distribution[cat]}`, 'info');
-            }
-        });
-        
-        return distribution;
-    }
-
-    function createTimeBalancedSquad(availableUnits, category, targetCapacity) {
-        addDebugLog(`Создание сбалансированного по времени отряда для ${categoryNames[category]}: требуется ${targetCapacity}`, 'info');
-        
-        const enabledUnits = worldUnits.filter(unit => 
-            troopTypesEnabled[unit.id] && availableUnits[unit.id] > 0
-        );
-        
-        if (enabledUnits.length === 0) {
-            addDebugLog('❌ Нет доступных выбранных типов войск', 'error');
-            return null;
-        }
-        
-        // СОРТИРУЕМ ПО СКОРОСТИ для балансировки времени возвращения
-        const sortedUnits = enabledUnits.sort((a, b) => a.speed - b.speed);
-        addDebugLog(`Доступные типы войск (от медленных к быстрым): ${sortedUnits.map(u => `${u.name}(${u.speed})`).join(', ')}`, 'info');
-        
-        const squad = {};
-        let totalCapacity = 0;
-        let remainingCapacity = targetCapacity;
-        
-        // Стратегия: равномерно распределяем между типами войск для балансировки скорости
-        const averageUnitCapacity = sortedUnits.reduce((sum, unit) => sum + unit.capacity, 0) / sortedUnits.length;
-        const baseUnitsPerType = Math.max(1, Math.floor(targetCapacity / sortedUnits.length / averageUnitCapacity));
-        
-        addDebugLog(`Базовое распределение: ~${baseUnitsPerType} юнитов каждого типа`, 'info');
-        
-        // Первый проход: базовое распределение
-        for (const unit of sortedUnits) {
-            if (availableUnits[unit.id] > 0 && totalCapacity < targetCapacity) {
-                const maxByCapacity = Math.floor(remainingCapacity / unit.capacity);
-                const maxAvailable = availableUnits[unit.id];
-                
-                let unitCount = Math.min(
-                    baseUnitsPerType,
-                    maxByCapacity,
-                    maxAvailable
-                );
-                
-                // Гарантируем минимум 1 если есть возможность
-                if (unitCount === 0 && maxAvailable > 0 && remainingCapacity >= unit.capacity) {
-                    unitCount = 1;
-                }
-                
-                if (unitCount > 0) {
-                    squad[unit.id] = unitCount;
-                    totalCapacity += unitCount * unit.capacity;
-                    remainingCapacity = targetCapacity - totalCapacity;
-                }
-            }
-        }
-        
-        // Второй проход: заполняем оставшуюся грузоподъемность, сохраняя баланс
-        if (remainingCapacity > 0) {
-            // Распределяем оставшееся пропорционально скорости (чтобы быстрые не улетали далеко вперед)
-            const unitsBySpeed = [...sortedUnits].sort((a, b) => b.speed - a.speed); // медленные сначала
-            
-            for (const unit of unitsBySpeed) {
-                if (availableUnits[unit.id] > (squad[unit.id] || 0) && remainingCapacity > 0) {
-                    const canAdd = Math.min(
-                        Math.floor(remainingCapacity / unit.capacity),
-                        availableUnits[unit.id] - (squad[unit.id] || 0)
-                    );
-                    
-                    if (canAdd > 0) {
-                        squad[unit.id] = (squad[unit.id] || 0) + canAdd;
-                        totalCapacity += canAdd * unit.capacity;
-                        remainingCapacity = targetCapacity - totalCapacity;
-                        
-                        addDebugLog(`  Добавлено ${canAdd} ${unit.name} для балансировки`, 'info');
-                    }
-                }
-                
-                if (remainingCapacity <= 0) break;
-            }
-        }
-        
-        const finalCapacity = calculateTotalCapacity(squad);
-        const capacityStatus = finalCapacity >= baseCapacities[category] ? 'success' : 'warning';
-        
-        addDebugLog(`Итоговый отряд для ${categoryNames[category]}: грузоподъемность ${finalCapacity}/${targetCapacity}`, capacityStatus);
-        
-        // Детальное логирование состава
-        if (hasUnits(squad)) {
-            addDebugLog(`Состав отряда:`, 'info');
-            Object.keys(squad).forEach(unitId => {
-                const unit = worldUnits.find(u => u.id === unitId);
-                const unitCapacity = squad[unitId] * unit.capacity;
-                addDebugLog(`  ${unit.name}: ${squad[unitId]} (емкость: ${unitCapacity}, скорость: ${unit.speed})`, 'info');
-            });
-            
-            // Рассчитываем примерное время возвращения (условно)
-            const avgSpeed = calculateAverageSpeed(squad);
-            addDebugLog(`Средняя скорость отряда: ${avgSpeed.toFixed(2)}`, 'info');
-        }
-        
-        return finalCapacity >= baseCapacities[category] ? squad : null;
-    }
-
-    // Вспомогательная функция для расчета средней скорости отряда
-    function calculateAverageSpeed(squad) {
-        let totalCapacity = 0;
-        let weightedSpeed = 0;
-        
-        Object.keys(squad).forEach(unitId => {
-            const unit = worldUnits.find(u => u.id === unitId);
-            const unitCapacity = squad[unitId] * unit.capacity;
-            totalCapacity += unitCapacity;
-            weightedSpeed += unitCapacity * unit.speed;
-        });
-        
-        return totalCapacity > 0 ? weightedSpeed / totalCapacity : 0;
-    }
-
     function calculateTotalCapacity(units) {
         return worldUnits.reduce((sum, unit) => {
             return sum + ((units[unit.id] || 0) * unit.capacity);
@@ -1486,12 +1320,6 @@
 
     function hasUnits(squad) {
         return squad && Object.values(squad).some(count => count > 0);
-    }
-
-    function subtractSquadFromAvailable(availableUnits, squad) {
-        Object.keys(squad).forEach(unit => {
-            availableUnits[unit] = Math.max(0, availableUnits[unit] - squad[unit]);
-        });
     }
 
     // ========== УЛУЧШЕННАЯ ОТПРАВКА ОТРЯДОВ ==========
@@ -1582,88 +1410,44 @@
         sendNextVillage();
     }
 
-    function sendSquadToVillage(row, squad) {
+    // УЛУЧШЕННАЯ ФУНКЦИЯ ОТПРАВКИ ОТРЯДОВ
+    async function sendSquadToVillage(row, squad) {
         try {
             addDebugLog(`Отправка отряда в деревню ${squad.village_name}...`, 'info');
             
-            // НОВЫЙ МЕТОД: поиск по классам option-
-            const categoryElements = row.querySelectorAll('[class*="option-"]');
-            addDebugLog(`Найдено элементов категорий: ${categoryElements.length}`, 'info');
+            // ДИАГНОСТИКА: тестируем кликабельность категорий
+            addDebugLog('=== ДИАГНОСТИКА КЛИКАБЕЛЬНОСТИ ===', 'info');
+            const isClickable = await testCategoryClickability(row, squad.option_id);
             
-            // Логируем все найденные элементы категорий
-            categoryElements.forEach((element, index) => {
-                const className = element.className || '';
-                const text = element.textContent || '';
-                addDebugLog(`Категория ${index}: class="${className}" text="${text.trim()}"`, 'info');
-            });
-    
-            // Ищем нужную категорию по номеру
-            const targetCategoryClass = `option-${squad.option_id}`;
-            let categoryElement = null;
-    
-            for (let element of categoryElements) {
-                if (element.className.includes(targetCategoryClass)) {
-                    // Проверяем, не заблокирована ли категория
-                    if (element.className.includes('option-locked') || 
-                        element.className.includes('status-locked') ||
-                        element.className.includes('status-unavailable')) {
-                        addDebugLog(`Категория ${squad.option_id} заблокирована`, 'warning');
-                        return false;
-                    }
-                    
-                    // Проверяем, активна ли категория
-                    if (element.className.includes('status-active') || 
-                        element.className.includes('status-inactive')) {
-                        categoryElement = element;
-                        addDebugLog(`✅ Найдена категория ${squad.option_id}`, 'success');
-                        break;
-                    }
-                }
-            }
-    
-            if (!categoryElement) {
-                addDebugLog(`❌ Категория ${squad.option_id} не найдена или недоступна`, 'error');
+            if (!isClickable) {
+                addDebugLog(`❌ Категория ${squad.option_id} не кликабельна`, 'error');
                 return false;
             }
-    
-            // Ищем кликабельный элемент внутри категории
-            let clickableElement = categoryElement.querySelector('a, button, [onclick], .clickable');
             
-            if (!clickableElement) {
-                // Если нет отдельного кликабельного элемента, кликаем на саму категорию
-                clickableElement = categoryElement;
-            }
-    
-            // Кликаем на категорию
-            addDebugLog(`Кликаем на категорию ${squad.option_id}...`, 'info');
-            clickableElement.click();
-    
-            // Ждем обновления интерфейса
-            setTimeout(() => {
-                // Ищем кнопку отправки
-                const sendButton = findSendButton(row);
-                if (sendButton && !sendButton.disabled) {
-                    addDebugLog('✅ Найдена кнопка отправки, кликаем...', 'success');
-                    sendButton.click();
-                    
-                    // Успешная отправка
-                    setTimeout(() => {
-                        showNotification(`Отряд отправлен: ${squad.village_name} -> ${squad.category_name}`, 'success');
-                    }, 500);
-                    
-                } else {
-                    addDebugLog('❌ Кнопка отправки не найдена или заблокирована после выбора категории', 'error');
-                    
-                    // Альтернативная стратегия: ищем форму и отправляем ее
-                    const form = row.querySelector('form');
-                    if (form) {
-                        addDebugLog('Пробуем отправить форму напрямую...', 'info');
-                        form.submit();
-                    }
+            // Основная логика отправки...
+            const categoryElements = row.querySelectorAll('[class*="option-"]');
+            const targetCategoryClass = `option-${squad.option_id}`;
+            let categoryElement = null;
+
+            for (let element of categoryElements) {
+                if (element.className.includes(targetCategoryClass) && 
+                    !element.className.includes('header-option')) {
+                    categoryElement = element;
+                    break;
                 }
-            }, 1000);
-    
-            return true;
+            }
+
+            if (!categoryElement) {
+                return false;
+            }
+
+            // Кликаем на категорию для активации
+            categoryElement.click();
+            addDebugLog(`✅ Категория ${squad.option_id} активирована`, 'success');
+
+            // Ждем и отправляем
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            return await sendActivatedCategory(row, squad, categoryElement);
             
         } catch (e) {
             addDebugLog(`Ошибка при отправке: ${e.message}`, 'error');
@@ -1671,68 +1455,88 @@
         }
     }
 
-    
-    function analyzeInterface(row) {
-        addDebugLog('=== АНАЛИЗ ИНТЕРФЕЙСА ===', 'info');
-        
-        // Анализируем все элементы в строке
-        const allElements = row.querySelectorAll('*');
-        addDebugLog(`Всего элементов в строке: ${allElements.length}`, 'info');
-        
-        // Логируем структуру
-        allElements.forEach((element, index) => {
-            const tag = element.tagName.toLowerCase();
-            const text = (element.textContent || '').trim().substring(0, 50);
-            const className = element.className || '';
-            const id = element.id || '';
-            
-            if (text || className || id) {
-                addDebugLog(`Элемент ${index}: <${tag}> class="${className}" id="${id}" text="${text}"`, 'info');
+    // Функция для диагностики кликабельности
+    function testCategoryClickability(row, categoryId) {
+        return new Promise((resolve) => {
+            const categoryElement = row.querySelector(`.option-${categoryId}:not(.header-option)`);
+            if (!categoryElement) {
+                resolve(false);
+                return;
             }
-        });
-        
-        // Анализируем формы
-        const forms = row.querySelectorAll('form');
-        forms.forEach((form, index) => {
-            addDebugLog(`Форма ${index}: action="${form.action}" method="${form.method}"`, 'info');
-        });
-        
-        // Анализируем inputs
-        const inputs = row.querySelectorAll('input');
-        inputs.forEach((input, index) => {
-            addDebugLog(`Input ${index}: type="${input.type}" name="${input.name}" value="${input.value}"`, 'info');
+            
+            // Добавляем временный обработчик для отслеживания кликов
+            const clickHandler = () => {
+                addDebugLog(`✅ Категория ${categoryId} кликабельна!`, 'success');
+                resolve(true);
+            };
+            
+            categoryElement.addEventListener('click', clickHandler, { once: true });
+            
+            // Кликаем на категорию
+            categoryElement.click();
+            
+            // Ждем реакции
+            setTimeout(() => {
+                categoryElement.removeEventListener('click', clickHandler);
+                resolve(false);
+            }, 1000);
         });
     }
 
-    function isOptionForCategory(optionText, categoryId) {
-        const text = optionText.toLowerCase();
-        
-        // Соответствие категорий и текста опций
-        const categoryPatterns = {
-            1: ['ленив', 'lazy', '1', 'мал', 'cat. 1', 'кат. 1'],
-            2: ['быстр', 'fast', '2', 'сред', 'cat. 2', 'кат. 2'],
-            3: ['находч', 'clever', '3', 'бол', 'cat. 3', 'кат. 3'],
-            4: ['жадн', 'greedy', '4', 'макс', 'cat. 4', 'кат. 4']
-        };
-        
-        const patterns = categoryPatterns[categoryId] || [];
-        return patterns.some(pattern => text.includes(pattern));
+    // Функция для отправки уже активированной категории
+    function sendActivatedCategory(row, squad, categoryElement) {
+        return new Promise((resolve) => {
+            addDebugLog(`Отправка активированной категории ${squad.option_id}...`, 'info');
+
+            // Ждем немного для стабилизации интерфейса
+            setTimeout(() => {
+                // Ищем кнопку отправки
+                const sendButton = findSendButton(row);
+                
+                if (sendButton && !sendButton.disabled) {
+                    addDebugLog('✅ Найдена активная кнопка отправки', 'success');
+                    
+                    // Кликаем на кнопку отправки
+                    sendButton.click();
+                    addDebugLog(`✅ Отряд отправлен: ${squad.village_name} -> ${squad.category_name}`, 'success');
+                    
+                    resolve(true);
+                } else {
+                    addDebugLog('❌ Кнопка отправки не найдена или заблокирована', 'error');
+                    
+                    // Альтернативная стратегия: ищем форму отправки
+                    const form = findScavengeForm(row);
+                    if (form) {
+                        addDebugLog('Пробуем отправить форму напрямую...', 'info');
+                        form.submit();
+                        resolve(true);
+                    } else {
+                        resolve(false);
+                    }
+                }
+            }, 1500);
+        });
     }
-    
-    // Вспомогательная функция для определения категории кнопки
-    function isButtonForCategory(buttonText, categoryId) {
-        const text = buttonText.toLowerCase();
+
+    // Функция поиска формы отправки
+    function findScavengeForm(row) {
+        const forms = row.querySelectorAll('form');
+        for (let form of forms) {
+            if (form.action.includes('scavenge') || form.innerHTML.includes('scavenge')) {
+                return form;
+            }
+        }
         
-        // Соответствие категорий и текста кнопок
-        const categoryPatterns = {
-            1: ['ленив', 'lazy', 'cat. 1', 'кат. 1', 'category 1'],
-            2: ['быстр', 'fast', 'cat. 2', 'кат. 2', 'category 2'],
-            3: ['находч', 'clever', 'cat. 3', 'кат. 3', 'category 3'],
-            4: ['жадн', 'greedy', 'cat. 4', 'кат. 4', 'category 4']
-        };
+        // Ищем форму по содержанию
+        const allForms = document.querySelectorAll('form');
+        for (let form of allForms) {
+            const html = form.innerHTML;
+            if (html.includes('option-') && html.includes('собиратели')) {
+                return form;
+            }
+        }
         
-        const patterns = categoryPatterns[categoryId] || [];
-        return patterns.some(pattern => text.includes(pattern));
+        return null;
     }
 
     function findSendButton(row) {
@@ -2006,25 +1810,6 @@
         }
     }
 
-    function debugInterfaceStructure(row) {
-        addDebugLog('=== ДЕТАЛЬНАЯ СТРУКТУРА ИНТЕРФЕЙСА ===', 'info');
-        
-        // Ищем все контейнеры с категориями
-        const containers = row.querySelectorAll('[class*="scavenge"], [class*="option"], [class*="category"]');
-        containers.forEach((container, index) => {
-            const className = container.className;
-            const html = container.innerHTML.substring(0, 200);
-            addDebugLog(`Контейнер ${index}: ${className}`, 'info');
-            addDebugLog(`HTML: ${html}...`, 'info');
-        });
-        
-        // Ищем все формы
-        const forms = row.querySelectorAll('form');
-        forms.forEach((form, index) => {
-            addDebugLog(`Форма ${index}: action="${form.action}" method="${form.method}"`, 'info');
-        });
-    }
-
     function createInterface() {
         const existing = document.querySelector('.g4lkir95-panel');
         if (existing) existing.remove();
@@ -2033,7 +1818,7 @@
         panel.className = 'g4lkir95-panel';
         panel.innerHTML = `
             <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
-            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.9.4</div>
+            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.9.5</div>
             ${createSettingsInterface()}
 
             <div class="g4lkir95-section">
@@ -2126,10 +1911,9 @@
     };
     window.g4lkir95ClearLogs = clearDebugLogs;
 
-
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
-        console.log('G4lKir95: Initializing v4.9.4 with improved interface detection...');
+        console.log('G4lKir95: Initializing v4.9.5 with improved interface detection...');
         
         // Проверяем, что мы на правильной странице
         if (window.location.href.indexOf('mode=scavenge_mass') === -1) {
@@ -2144,8 +1928,8 @@
         loadSophieSettings();
         addLaunchButton();
         setTimeout(createInterface, 500);
-        addDebugLog('G4lKir95 Mass Scavenging v4.9.4 активирован! Улучшенный поиск интерфейса.', 'success');
-        showNotification('G4lKir95 Mass Scavenging v4.9.4 активирован!', 'success');
+        addDebugLog('G4lKir95 Mass Scavenging v4.9.5 активирован! Улучшенный поиск интерфейса.', 'success');
+        showNotification('G4lKir95 Mass Scavenging v4.9.5 активирован!', 'success');
     }
 
     if (document.readyState === 'loading') {
