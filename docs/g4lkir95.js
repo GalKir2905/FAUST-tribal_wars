@@ -522,20 +522,28 @@
         const villages = [];
         
         try {
-            addDebugLog('=== ТОЧНЫЙ ПОИСК ИНТЕРФЕЙСА МАССОВОГО СБОРА ===', 'info');
+            addDebugLog('=== ПОИСК ИНТЕРФЕЙСА МАССОВОГО СБОРА ===', 'info');
             
             // Сначала ищем основной контейнер массового сбора
             const mainContainer = findMassScavengeContainer();
             if (!mainContainer) {
                 addDebugLog('❌ Не найден контейнер массового сбора!', 'error');
+                addDebugLog('Убедитесь, что вы находитесь на странице массового сбора (mode=scavenge_mass)', 'error');
                 return villages;
             }
             
             addDebugLog('✅ Найден основной контейнер массового сбора', 'success');
             
             // Ищем реальные строки с деревнями для сбора
-            const villageRows = findRealVillageRows(mainContainer);
-            addDebugLog(`Найдено реальных строк с деревнями: ${villageRows.length}`, 'info');
+            const villageRows = findVillageRowsInContainer(mainContainer);
+            addDebugLog(`Найдено строк с деревнями: ${villageRows.length}`, 'info');
+            
+            if (villageRows.length === 0) {
+                addDebugLog('Пробуем альтернативный поиск строк...', 'info');
+                // Альтернативный поиск по всей странице
+                const allRows = document.querySelectorAll('tr, .village-row, .row, div.village');
+                addDebugLog(`Всего потенциальных строк: ${allRows.length}`, 'info');
+            }
             
             let processedVillages = 0;
             
@@ -575,46 +583,150 @@
             });
             
             addDebugLog(`Всего обработано деревень: ${processedVillages}`, 'success');
+            
+            if (processedVillages === 0) {
+                addDebugLog('Не найдено деревень для обработки. Проверьте:', 'error');
+                addDebugLog('1. Вы находитесь на странице массового сбора', 'error');
+                addDebugLog('2. У вас есть деревни с доступными войсками', 'error');
+                addDebugLog('3. Интерфейс массового сбора загружен', 'error');
+            }
+            
             return villages;
         } catch (e) {
             addDebugLog(`Критическая ошибка получения данных: ${e.message}`, 'error');
             return [];
         }
     }
-
-    function findMassScavengeContainer() {
-        // Ищем контейнер массового сбора по специфичным признакам
-        const possibleSelectors = [
-            '#scavenge_mass_content',
-            '.mass_scavenge_content',
-            '[id*="scavenge"]',
-            '[class*="scavenge"]',
-            '.content-border',
-            '#content-border'
+    
+    // Новая функция для поиска строк с деревнями
+    function findVillageRowsInContainer(container) {
+        const rows = [];
+        
+        // Различные селекторы для строк с деревнями
+        const rowSelectors = [
+            'tr',
+            '.village-row',
+            '.row',
+            'div.village',
+            '[class*="village"]',
+            '.content-border tr',
+            '.mass_scavenge_content tr'
         ];
         
-        for (const selector of possibleSelectors) {
+        for (const selector of rowSelectors) {
+            const foundRows = container.querySelectorAll(selector);
+            if (foundRows.length > 0) {
+                addDebugLog(`Найдено строк через селектор ${selector}: ${foundRows.length}`, 'info');
+                
+                foundRows.forEach(row => {
+                    if (isValidVillageRow(row) && !rows.includes(row)) {
+                        rows.push(row);
+                    }
+                });
+            }
+        }
+        
+        // Если не нашли по селекторам, ищем вручную
+        if (rows.length === 0) {
+            addDebugLog('Ручной поиск строк...', 'info');
+            const allElements = container.querySelectorAll('*');
+            
+            for (let element of allElements) {
+                if (element.textContent && element.textContent.length > 50 && 
+                    !isNavigationOrMenu(element) && 
+                    findVillageLinkWithCoords(element) && 
+                    hasScavengeControls(element)) {
+                    rows.push(element);
+                }
+            }
+        }
+        
+        return rows;
+    }
+    
+    // Функция проверки валидности строки деревни
+    function isValidVillageRow(row) {
+        // Пропускаем маленькие элементы
+        if (row.textContent.length < 30) {
+            return false;
+        }
+        
+        // Пропускаем элементы меню и навигации
+        if (isNavigationOrMenu(row)) {
+            return false;
+        }
+        
+        // Должна быть ссылка на деревню с координатами
+        if (!findVillageLinkWithCoords(row)) {
+            return false;
+        }
+        
+        // Должны быть элементы управления (кнопки отправки)
+        if (!hasScavengeControls(row)) {
+            return false;
+        }
+        
+        return true;
+    }
+
+    function findMassScavengeContainer() {
+        addDebugLog('Поиск контейнера массового сбора...', 'info');
+        
+        // Сначала ищем по специфичным ID и классам
+        const specificSelectors = [
+            '#scavenge_mass_content',
+            '.mass_scavenge_content',
+            '#content-border',
+            '.content-border',
+            '[id*="scavenge_mass"]',
+            '[class*="scavenge_mass"]',
+            '#scavenge_content',
+            '.scavenge_content'
+        ];
+        
+        for (const selector of specificSelectors) {
             const element = document.querySelector(selector);
             if (element) {
-                addDebugLog(`Найден элемент через селектор: ${selector}`, 'success');
+                addDebugLog(`✅ Найден через селектор: ${selector}`, 'success');
                 return element;
             }
         }
         
-        // Если не нашли по селекторам, ищем по содержимому
+        // Ищем по содержимому
         addDebugLog('Поиск по содержимому...', 'info');
-        const allDivs = document.querySelectorAll('div');
+        const allDivs = document.querySelectorAll('div, table, form');
         
-        for (let div of allDivs) {
-            const text = div.textContent;
-            if ((text.includes('сбор') && text.includes('ресурс')) || 
+        for (let element of allDivs) {
+            const text = element.textContent;
+            if (text && (
+                (text.includes('сбор') && text.includes('ресурс')) || 
                 (text.includes('scavenge') && text.includes('mass')) ||
                 text.includes('Ленивые собиратели') ||
-                text.includes('Быстрые собиратели')) {
-                addDebugLog('Найден контейнер по содержимому', 'success');
-                return div;
+                text.includes('Быстрые собиратели') ||
+                text.includes('Находчивые собиратели') ||
+                text.includes('Жадные собиратели') ||
+                (text.includes('Lazy') && text.includes('Scavenger')) ||
+                element.innerHTML.includes('scavenge_mass')
+            )) {
+                addDebugLog('✅ Найден по содержимому', 'success');
+                return element;
             }
         }
+        
+        // Если не нашли, пробуем найти форму массового сбора
+        const forms = document.querySelectorAll('form');
+        for (let form of forms) {
+            if (form.innerHTML.includes('scavenge') || form.action.includes('scavenge')) {
+                addDebugLog('✅ Найден через форму', 'success');
+                return form;
+            }
+        }
+        
+        addDebugLog('❌ Контейнер массового сбора не найден!', 'error');
+        addDebugLog('Проверьте URL: должен содержать mode=scavenge_mass', 'error');
+        
+        // Покажем текущий URL для отладки
+        addDebugLog(`Текущий URL: ${window.location.href}`, 'info');
         
         return null;
     }
@@ -694,22 +806,30 @@
     function isNavigationOrMenu(element) {
         const text = element.textContent;
         const html = element.innerHTML;
+        const classList = element.className || '';
         
         // Признаки навигации/меню
-        if (text.includes('Приказы') || 
-            text.includes('Войска') || 
-            text.includes('Сбор ресурсов') ||
-            text.includes('Массовый сбор ресурсов') ||
-            text.includes('Симулятор') ||
-            text.includes('Соседние деревни') ||
-            text.includes('Шаблоны') ||
-            text.includes('Массовое подкрепление')) {
-            return true;
+        const navigationIndicators = [
+            'Приказы', 'Войска', 'Сбор ресурсов', 'Массовый сбор ресурсов',
+            'Симулятор', 'Соседние деревни', 'Шаблоны', 'Массовое подкрепление',
+            'Overview', 'Reports', 'Messages', 'Profile', 'Forum', 'Logout',
+            'navigation', 'menu', 'navi', 'submenu', 'quickbar'
+        ];
+        
+        for (const indicator of navigationIndicators) {
+            if (text.includes(indicator) || classList.toLowerCase().includes(indicator.toLowerCase())) {
+                return true;
+            }
         }
         
         // Признаки ссылок меню
-        const menuLinks = element.querySelectorAll('a[href*="mode="]');
-        if (menuLinks.length > 2) {
+        const menuLinks = element.querySelectorAll('a[href*="mode="], a[href*="screen="]');
+        if (menuLinks.length > 3) {
+            return true;
+        }
+        
+        // Элементы с малым количеством текста (вероятно не деревни)
+        if (text.length < 100 && !findVillageLinkWithCoords(element)) {
             return true;
         }
         
@@ -1684,7 +1804,7 @@
         panel.className = 'g4lkir95-panel';
         panel.innerHTML = `
             <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
-            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.8</div>
+            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.9</div>
             ${createSettingsInterface()}
 
             <div class="g4lkir95-section">
@@ -1779,15 +1899,23 @@
 
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
-        console.log('G4lKir95: Initializing v4.8 with balanced troop distribution...');
+        console.log('G4lKir95: Initializing v4.9 with improved interface detection...');
+        
+        // Проверяем, что мы на правильной странице
+        if (window.location.href.indexOf('mode=scavenge_mass') === -1) {
+            addDebugLog('Не на странице массового сбора. Перенаправление...', 'warning');
+            // Автоматическое перенаправление уже должно работать
+            return;
+        }
+        
         const styleSheet = document.createElement('style');
         styleSheet.textContent = styles;
         document.head.appendChild(styleSheet);
         loadSophieSettings();
         addLaunchButton();
         setTimeout(createInterface, 500);
-        addDebugLog('G4lKir95 Mass Scavenging v4.8 активирован! Сбалансированное распределение.', 'success');
-        showNotification('G4lKir95 Mass Scavenging v4.8 активирован!', 'success');
+        addDebugLog('G4lKir95 Mass Scavenging v4.9 активирован! Улучшенный поиск интерфейса.', 'success');
+        showNotification('G4lKir95 Mass Scavenging v4.9 активирован!', 'success');
     }
 
     if (document.readyState === 'loading') {
