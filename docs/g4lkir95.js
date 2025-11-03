@@ -619,39 +619,76 @@
         return null;
     }
 
-    function findRealVillageRows(container) {
-        const rows = [];
+    function findRealVillageRow(villageName) {
+        addDebugLog(`Поиск строки для деревни: ${villageName}`, 'info');
         
-        // Ищем строки, которые содержат реальные деревни для сбора (не меню)
-        const potentialRows = container.querySelectorAll('tr, .village-row, [class*="village"], div');
-        
-        potentialRows.forEach(row => {
-            // Пропускаем маленькие элементы
-            if (row.textContent.length < 50) {
-                return;
+        try {
+            // Упрощаем поиск - используем только часть имени деревни (координаты)
+            const coordMatch = villageName.match(/(\d+\|\d+)/);
+            if (!coordMatch) {
+                addDebugLog(`❌ Не найдены координаты в названии: ${villageName}`, 'error');
+                return null;
             }
             
-            // Пропускаем элементы меню и навигации
-            if (isNavigationOrMenu(row)) {
-                return;
+            const coords = coordMatch[0];
+            addDebugLog(`Ищем по координатам: ${coords}`, 'info');
+            
+            // Ищем все элементы, содержащие координаты
+            const allElements = document.querySelectorAll('*');
+            let targetRow = null;
+            
+            for (let element of allElements) {
+                const text = element.textContent;
+                if (text && text.includes(coords)) {
+                    addDebugLog(`Найден элемент с координатами ${coords}`, 'success');
+                    
+                    // Поднимаемся до родительского контейнера строки
+                    let row = element.closest('tr');
+                    if (!row) {
+                        // Если нет tr, ищем другие контейнеры
+                        row = element.closest('.village-row') || 
+                               element.closest('.row') || 
+                               element.closest('div') || 
+                               element.parentElement;
+                    }
+                    
+                    if (row && hasScavengeControls(row)) {
+                        targetRow = row;
+                        addDebugLog(`✅ Найдена подходящая строка с элементами управления`, 'success');
+                        break;
+                    } else {
+                        addDebugLog(`Элемент с координатами найден, но нет элементов управления`, 'warning');
+                    }
+                }
             }
             
-            // Должна быть ссылка на деревню с координатами
-            const villageLink = findVillageLinkWithCoords(row);
-            if (!villageLink) {
-                return;
+            if (!targetRow) {
+                addDebugLog(`❌ Не найдена строка с элементами управления для ${villageName}`, 'error');
+                
+                // Альтернативный метод: ищем по последней части имени
+                const nameParts = villageName.split(' ');
+                const searchName = nameParts[nameParts.length - 1]; // Берем последнюю часть (координаты)
+                addDebugLog(`Пробуем альтернативный поиск по: ${searchName}`, 'info');
+                
+                for (let element of allElements) {
+                    const text = element.textContent;
+                    if (text && text.includes(searchName)) {
+                        let row = element.closest('tr') || element.closest('div') || element.parentElement;
+                        if (row && hasScavengeControls(row)) {
+                            targetRow = row;
+                            addDebugLog(`✅ Найдена строка через альтернативный поиск`, 'success');
+                            break;
+                        }
+                    }
+                }
             }
             
-            // Должны быть элементы управления (кнопки отправки)
-            const hasControls = hasScavengeControls(row);
-            if (!hasControls) {
-                return;
-            }
+            return targetRow;
             
-            rows.push(row);
-        });
-        
-        return rows;
+        } catch (e) {
+            addDebugLog(`Ошибка поиска строки: ${e.message}`, 'error');
+            return null;
+        }
     }
 
     function isNavigationOrMenu(element) {
@@ -694,27 +731,38 @@
     }
 
     function hasScavengeControls(row) {
-        // Ищем кнопки отправки на сбор
-        const buttons = row.querySelectorAll('button, input[type="submit"], .btn');
+        // Расширяем поиск элементов управления
+        const buttons = row.querySelectorAll('button, input[type="submit"], input[type="button"], .btn, .button');
+        const selects = row.querySelectorAll('select');
+        
+        // Проверяем кнопки отправки
         const scavengeButtons = Array.from(buttons).filter(btn => {
-            const text = btn.textContent;
+            const text = btn.textContent || btn.value || '';
+            const onClick = btn.getAttribute('onclick') || '';
             return text.includes('Отправить') || 
                    text.includes('Send') || 
                    text.includes('Сбор') ||
-                   btn.getAttribute('onclick')?.includes('scavenge');
+                   onClick.includes('scavenge') ||
+                   text.includes('Отпр') ||
+                   btn.id.includes('scavenge');
         });
         
-        if (scavengeButtons.length > 0) {
-            return true;
+        // Проверяем выпадающие списки
+        const scavengeSelects = Array.from(selects).filter(select => {
+            const options = select.querySelectorAll('option');
+            return Array.from(options).some(opt => 
+                opt.textContent.includes('собиратель') || 
+                opt.textContent.includes('scavenge')
+            );
+        });
+        
+        const hasControls = scavengeButtons.length > 0 || scavengeSelects.length > 0;
+        
+        if (hasControls) {
+            addDebugLog(`Найдены элементы управления: кнопок=${scavengeButtons.length}, селектов=${scavengeSelects.length}`, 'success');
         }
         
-        // Ищем выпадающие списки категорий
-        const selects = row.querySelectorAll('select');
-        if (selects.length > 0) {
-            return true;
-        }
-        
-        return false;
+        return hasControls;
     }
 
     function extractVillageInfoFromRow(row) {
@@ -1300,44 +1348,68 @@
         try {
             addDebugLog(`Отправка отряда в деревню ${squad.village_name}...`, 'info');
             
-            const buttons = row.querySelectorAll('button, input[type="submit"], .btn');
+            // Более детальный поиск элементов управления
+            const buttons = row.querySelectorAll('button, input[type="submit"], input[type="button"], .btn, .button');
             const selects = row.querySelectorAll('select');
             
-            addDebugLog(`Найдено элементов: кнопок=${buttons.length}, селектов=${selects.length}`, 'info');
+            addDebugLog(`Найдено элементов в строке: кнопок=${buttons.length}, селектов=${selects.length}`, 'info');
             
+            // Логируем все найденные кнопки для отладки
+            buttons.forEach((btn, index) => {
+                const text = btn.textContent || btn.value || '';
+                addDebugLog(`Кнопка ${index}: "${text.substring(0, 30)}"`, 'info');
+            });
+    
             if (selects.length > 0) {
                 // Используем выпадающий список
                 const select = selects[0];
+                addDebugLog(`Установка категории ${squad.option_id} в выпадающем списке`, 'info');
                 select.value = squad.option_id;
-                addDebugLog(`Установлен выбор категории: ${squad.category_name}`, 'success');
+                
+                // Триггерим событие изменения
+                select.dispatchEvent(new Event('change', { bubbles: true }));
                 
                 // Ищем кнопку отправки
                 const sendButton = findSendButton(row);
                 if (sendButton && !sendButton.disabled) {
-                    addDebugLog('Найдена кнопка отправки, кликаем...', 'info');
+                    addDebugLog('Найдена кнопка отправки, кликаем...', 'success');
                     sendButton.click();
                     return true;
                 } else {
                     addDebugLog('Кнопка отправки не найдена или заблокирована', 'error');
                     return false;
                 }
-            } else if (buttons.length >= 4) {
-                // Используем отдельные кнопки для каждой категории
-                const buttonIndex = squad.option_id - 1;
-                if (buttonIndex < buttons.length) {
-                    const button = buttons[buttonIndex];
-                    if (button && !button.disabled) {
-                        addDebugLog(`Найдена кнопка для категории ${squad.category_name}, кликаем...`, 'info');
+            } else if (buttons.length > 0) {
+                // Пробуем найти кнопку по категории
+                let buttonFound = false;
+                
+                for (let i = 0; i < buttons.length; i++) {
+                    const button = buttons[i];
+                    const text = (button.textContent || button.value || '').toLowerCase();
+                    
+                    // Проверяем, соответствует ли кнопка категории
+                    if (!button.disabled && isButtonForCategory(text, squad.option_id)) {
+                        addDebugLog(`Найдена кнопка для категории ${squad.category_name}, кликаем...`, 'success');
                         button.click();
-                        return true;
-                    } else {
-                        addDebugLog(`Кнопка для категории ${squad.category_name} заблокирована`, 'error');
-                        return false;
+                        buttonFound = true;
+                        break;
                     }
-                } else {
-                    addDebugLog(`Не найдена кнопка для категории ${squad.category_name}`, 'error');
-                    return false;
                 }
+                
+                if (!buttonFound) {
+                    // Если не нашли по категории, используем первую доступную кнопку
+                    for (let i = 0; i < buttons.length; i++) {
+                        const button = buttons[i];
+                        if (!button.disabled) {
+                            addDebugLog(`Используем первую доступную кнопку: "${button.textContent}"`, 'warning');
+                            button.click();
+                            buttonFound = true;
+                            break;
+                        }
+                    }
+                }
+                
+                return buttonFound;
             } else {
                 addDebugLog('Не найдены элементы управления для отправки', 'error');
                 return false;
@@ -1347,14 +1419,34 @@
             return false;
         }
     }
+    
+    // Вспомогательная функция для определения категории кнопки
+    function isButtonForCategory(buttonText, categoryId) {
+        const text = buttonText.toLowerCase();
+        
+        // Соответствие категорий и текста кнопок
+        const categoryPatterns = {
+            1: ['ленив', 'lazy', '1', 'мал'],
+            2: ['быстр', 'fast', '2', 'сред'],
+            3: ['находч', 'clever', '3', 'бол'],
+            4: ['жадн', 'greedy', '4', 'макс']
+        };
+        
+        const patterns = categoryPatterns[categoryId] || [];
+        return patterns.some(pattern => text.includes(pattern));
+    }
 
     function findSendButton(row) {
-        // Ищем кнопку отправки по тексту или классам
-        const buttons = row.querySelectorAll('button, input[type="submit"], .btn');
+        // Расширяем поиск кнопки отправки
+        const buttons = row.querySelectorAll('button, input[type="submit"], input[type="button"], .btn, .button');
         
         for (let button of buttons) {
-            const text = button.textContent.toLowerCase();
-            if (text.includes('отправить') || text.includes('send') || text.includes('сбор')) {
+            const text = (button.textContent || button.value || '').toLowerCase();
+            if ((text.includes('отправить') || 
+                 text.includes('send') || 
+                 text.includes('сбор') ||
+                 text.includes('отпр')) && 
+                !button.disabled) {
                 return button;
             }
         }
@@ -1592,7 +1684,7 @@
         panel.className = 'g4lkir95-panel';
         panel.innerHTML = `
             <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
-            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.7</div>
+            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.8</div>
             ${createSettingsInterface()}
 
             <div class="g4lkir95-section">
@@ -1687,15 +1779,15 @@
 
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
-        console.log('G4lKir95: Initializing v4.7 with balanced troop distribution...');
+        console.log('G4lKir95: Initializing v4.8 with balanced troop distribution...');
         const styleSheet = document.createElement('style');
         styleSheet.textContent = styles;
         document.head.appendChild(styleSheet);
         loadSophieSettings();
         addLaunchButton();
         setTimeout(createInterface, 500);
-        addDebugLog('G4lKir95 Mass Scavenging v4.7 активирован! Сбалансированное распределение.', 'success');
-        showNotification('G4lKir95 Mass Scavenging v4.7 активирован!', 'success');
+        addDebugLog('G4lKir95 Mass Scavenging v4.8 активирован! Сбалансированное распределение.', 'success');
+        showNotification('G4lKir95 Mass Scavenging v4.8 активирован!', 'success');
     }
 
     if (document.readyState === 'loading') {
