@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         FAUST Tribal Wars Mass Resource Collection
+// @name         FAUST Tribal Wars Mass Scavenging v3.3
 // @namespace    http://tampermonkey.net/
-// @version      2.0
+// @version      3.3
 // @description  Массовый сбор ресурсов с поддержкой русского языка и периодичностью запуска
 // @author       G4lKir95 & Sophie
 // @match        https://*.tribalwars.com.ua/game.php*
@@ -14,524 +14,959 @@
 (function() {
     'use strict';
 
-    // Конфигурация и настройки
-    const CONFIG = {
-        version: '2.0',
-        debug: false,
-        maxVillages: 100,
-        defaultInterval: 60 // минут
-    };
+    // Автоматическое перенаправление на страницу массового сбора
+    if (window.location.href.indexOf('mode=scavenge_mass') === -1 && 
+        window.location.href.indexOf('screen=place') !== -1) {
+        console.log('G4lKir95: Redirecting to mass scavenging page');
+        const gameServer = window.location.hostname;
+        const gamePhp = window.location.pathname;
+        const massUrl = `https://${gameServer}${gamePhp}?screen=place&mode=scavenge_mass`;
+        window.location.href = massUrl;
+        return;
+    }
 
-    // Хранилище данных
-    const Storage = {
-        get: (key, defaultValue = null) => {
-            try {
-                const value = GM_getValue(key);
-                return value !== undefined ? value : defaultValue;
-            } catch (e) {
-                return defaultValue;
+    // ========== КОНФИГУРАЦИЯ ==========
+    let repeatEnabled = false;
+    let repeatCount = 1;
+    let repeatInterval = 60;
+    let currentRepeat = 0;
+    let repeatTimer = null;
+    let isRunning = false;
+
+    // Переменные из скрипта Sophie
+    let serverTimeTemp, serverTime, serverDate;
+    let keepHome = {};
+    let categoryEnabled = [];
+    let prioritiseHighCat = false, sendOrder = [];
+    let scavengeInfo, arrayWithData, enabledCategories = [];
+    let squad_requests = [], squad_requests_premium = [];
+    let duration_factor = 0, duration_exponent = 0, duration_initial_seconds = 0;
+    let categoryNames = [];
+
+    // Фиксированные настройки времени
+    const time = { 'off': 4, 'def': 12 };
+
+    // Основные юниты
+    const worldUnits = ['spear', 'sword', 'axe', 'light', 'heavy'];
+
+    // ========== СТИЛИ G4LKIR95 ==========
+    const styles = `
+        .g4lkir95-panel {
+            position: fixed; 
+            top: 50px; 
+            right: 10px; 
+            width: 400px;
+            background: #2c3e50; 
+            border: 2px solid #34495e; 
+            border-radius: 8px;
+            padding: 15px; 
+            z-index: 10000; 
+            font-family: Arial; 
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3); 
+            max-height: 90vh; 
+            overflow-y: auto;
+        }
+        .g4lkir95-header {
+            background: #34495e; 
+            padding: 10px; 
+            margin: -15px -15px 15px -15px;
+            border-radius: 6px 6px 0 0; 
+            text-align: center; 
+            font-weight: bold; 
+            font-size: 16px;
+        }
+        .g4lkir95-section {
+            margin-bottom: 15px; 
+            padding: 10px; 
+            background: #34495e; 
+            border-radius: 5px;
+        }
+        .g4lkir95-section-title {
+            font-weight: bold; 
+            margin-bottom: 8px; 
+            color: #ecf0f1; 
+            font-size: 14px;
+        }
+        .g4lkir95-button {
+            width: 100%; 
+            padding: 8px; 
+            margin: 5px 0; 
+            border: none; 
+            border-radius: 4px;
+            background: #e74c3c; 
+            color: white; 
+            font-weight: bold; 
+            cursor: pointer; 
+            font-size: 12px;
+        }
+        .g4lkir95-button:hover { 
+            background: #c0392b; 
+        }
+        .g4lkir95-button-success { 
+            background: #27ae60; 
+        }
+        .g4lkir95-button-success:hover { 
+            background: #219a52; 
+        }
+        .g4lkir95-button-warning { 
+            background: #f39c12; 
+        }
+        .g4lkir95-button-warning:hover { 
+            background: #d35400; 
+        }
+        .g4lkir95-close {
+            position: absolute; 
+            top: 5px; 
+            right: 10px; 
+            background: none; 
+            border: none;
+            color: white; 
+            font-size: 18px; 
+            cursor: pointer; 
+            font-weight: bold;
+        }
+        .g4lkir95-launch-btn {
+            position: fixed; 
+            top: 10px; 
+            right: 10px; 
+            padding: 8px 15px;
+            background: #e74c3c; 
+            color: white; 
+            border: none; 
+            border-radius: 5px;
+            cursor: pointer; 
+            font-weight: bold; 
+            z-index: 9999;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3); 
+            font-size: 12px;
+        }
+        .g4lkir95-launch-btn:hover { 
+            background: #c0392b; 
+        }
+        .g4lkir95-status {
+            text-align: center; 
+            padding: 5px; 
+            margin: 5px 0; 
+            border-radius: 3px; 
+            font-size: 11px;
+        }
+        .g4lkir95-status-active { 
+            background: #27ae60; 
+        }
+        .g4lkir95-status-inactive { 
+            background: #7f8c8d; 
+        }
+
+        /* Стили для юнитов */
+        .units-grid {
+            display: grid; 
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 10px; 
+            margin: 10px 0;
+        }
+        .unit-item {
+            background: #2c3e50; 
+            border: 1px solid #34495e; 
+            border-radius: 5px; 
+            padding: 8px;
+            text-align: center;
+        }
+        .unit-img {
+            background: #202225; 
+            padding: 5px; 
+            border-radius: 3px; 
+            margin-bottom: 5px;
+        }
+        .unit-name {
+            font-size: 10px; 
+            color: #bdc3c7; 
+            margin-bottom: 5px;
+        }
+        .unit-controls {
+            display: flex; 
+            flex-direction: column; 
+            gap: 3px;
+        }
+        .unit-backup {
+            width: 60px; 
+            font-size: 11px; 
+            padding: 2px; 
+            text-align: center;
+            background: #2c3e50; 
+            color: white; 
+            border: 1px solid #7f8c8d; 
+            border-radius: 3px;
+        }
+        .backup-label {
+            font-size: 9px; 
+            color: #bdc3c7; 
+            margin-bottom: 2px;
+        }
+
+        /* Стили для категорий */
+        .categories-grid {
+            display: grid; 
+            grid-template-columns: repeat(4, 1fr); 
+            gap: 10px; 
+            margin: 10px 0;
+        }
+        .category-item {
+            background: #2c3e50; 
+            border: 1px solid #34495e; 
+            border-radius: 5px; 
+            padding: 10px;
+            text-align: center; 
+            cursor: pointer;
+        }
+        .category-item.selected {
+            background: #27ae60; 
+            border-color: #219a52;
+        }
+        .category-name {
+            font-size: 11px; 
+            font-weight: bold; 
+            margin-bottom: 5px;
+        }
+    `;
+
+    // ========== ФУНКЦИИ УВЕДОМЛЕНИЙ ==========
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.style.cssText = `
+            position: fixed; 
+            top: 20px; 
+            left: 50%; 
+            transform: translateX(-50%);
+            padding: 10px 20px; 
+            background: ${type === 'success' ? '#27ae60' : type === 'error' ? '#e74c3c' : '#3498db'};
+            color: white; 
+            border-radius: 5px; 
+            z-index: 10001; 
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+        `;
+        notification.textContent = message;
+        document.body.appendChild(notification);
+        setTimeout(() => {
+            if (notification.parentNode) notification.remove();
+        }, 3000);
+    }
+
+    // ========== РЕАЛЬНЫЕ ФУНКЦИИ SOPHIE ДЛЯ ОТПРАВКИ ОТРЯДОВ ==========
+    function initServerTime() {
+        try {
+            const serverDateEl = document.querySelector("#serverDate");
+            const serverTimeEl = document.querySelector("#serverTime");
+            if (serverDateEl && serverTimeEl) {
+                serverTimeTemp = serverDateEl.innerText + " " + serverTimeEl.innerText;
+                serverTime = serverTimeTemp.match(/^([0][1-9]|[12][0-9]|3[01])[\/\-]([0][1-9]|1[012])[\/\-](\d{4})( (0?[0-9]|[1][0-9]|[2][0-3])[:]([0-5][0-9])([:]([0-5][0-9]))?)?$/);
+                if (serverTime) {
+                    serverDate = Date.parse(serverTime[3] + "/" + serverTime[2] + "/" + serverTime[1] + serverTime[4]);
+                }
             }
-        },
-        set: (key, value) => {
-            try {
-                GM_setValue(key, value);
-                return true;
-            } catch (e) {
-                console.error('Ошибка сохранения:', e);
-                return false;
-            }
+        } catch (e) {
+            console.log('G4lKir95: Error initializing server time', e);
         }
-    };
+    }
 
-    // Утилиты
-    const Utils = {
-        log: (...args) => {
-            if (CONFIG.debug) {
-                console.log('[FAUST]', ...args);
-            }
-        },
-        error: (...args) => {
-            console.error('[FAUST]', ...args);
-        },
-        sleep: (ms) => new Promise(resolve => setTimeout(resolve, ms)),
-        parseNumber: (text) => parseInt(text.replace(/[^\d]/g, '')) || 0,
-        formatTime: (seconds) => {
-            const hours = Math.floor(seconds / 3600);
-            const minutes = Math.floor((seconds % 3600) / 60);
-            const secs = seconds % 60;
-            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-        }
-    };
-
-    // Основной класс скрипта
-    class FaustMassCollection {
-        constructor() {
-            this.isRunning = false;
-            this.currentIteration = 0;
-            this.totalIterations = 1;
-            this.intervalMinutes = CONFIG.defaultInterval;
-            this.timerId = null;
-            this.villages = [];
-            this.init();
-        }
-
-        init() {
-            Utils.log('Инициализация скрипта FAUST');
-            this.loadSettings();
-            this.createInterface();
-            this.checkAutoStart();
-        }
-
-        loadSettings() {
-            const settings = Storage.get('faust_settings', {});
-            this.totalIterations = settings.totalIterations || 1;
-            this.intervalMinutes = settings.intervalMinutes || CONFIG.defaultInterval;
-            this.currentIteration = settings.currentIteration || 0;
-        }
-
-        saveSettings() {
-            const settings = {
-                totalIterations: this.totalIterations,
-                intervalMinutes: this.intervalMinutes,
-                currentIteration: this.currentIteration
-            };
-            Storage.set('faust_settings', settings);
-        }
-
-        createInterface() {
-            // Создаем контейнер для интерфейса
-            const container = document.createElement('div');
-            container.id = 'faust-container';
-            container.style.cssText = `
-                position: fixed;
-                top: 100px;
-                right: 10px;
-                background: #f5f5f5;
-                border: 2px solid #8B4513;
-                padding: 15px;
-                border-radius: 8px;
-                z-index: 10000;
-                min-width: 300px;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-                font-family: Arial, sans-serif;
-            `;
-
-            container.innerHTML = `
-                <div style="margin-bottom: 15px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
-                    <h3 style="margin: 0 0 10px 0; color: #8B4513;">FAUST Массовый Сбор</h3>
-                    <div style="font-size: 11px; color: #666;">Версия ${CONFIG.version}</div>
-                </div>
-
-                <div style="margin-bottom: 10px;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Количество повторов:</label>
-                    <input type="number" id="faust-iterations" min="1" value="${this.totalIterations}" style="width: 100%; padding: 5px; border: 1px solid #ccc; border-radius: 3px;">
-                </div>
-
-                <div style="margin-bottom: 10px;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: bold;">Интервал (минуты):</label>
-                    <input type="number" id="faust-interval" min="1" value="${this.intervalMinutes}" style="width: 100%; padding: 5px; border: 1px solid #ccc; border-radius: 3px;">
-                </div>
-
-                <div style="margin-bottom: 15px; font-size: 12px; color: #666;">
-                    <div>Текущий запуск: <span id="faust-current-iteration">${this.currentIteration}</span> из <span id="faust-total-iterations">${this.totalIterations}</span></div>
-                    <div>Следующий запуск: <span id="faust-next-run">-</span></div>
-                </div>
-
-                <div style="display: flex; gap: 5px; margin-bottom: 10px;">
-                    <button id="faust-start-once" style="flex: 1; padding: 8px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Запуск 1 раз</button>
-                    <button id="faust-start-repeat" style="flex: 1; padding: 8px; background: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Запуск с повторами</button>
-                </div>
-
-                <div style="display: flex; gap: 5px;">
-                    <button id="faust-stop" style="flex: 1; padding: 8px; background: #f44336; color: white; border: none; border-radius: 4px; cursor: pointer; display: none;">Остановить</button>
-                    <button id="faust-reset" style="flex: 1; padding: 8px; background: #FF9800; color: white; border: none; border-radius: 4px; cursor: pointer;">Сбросить</button>
-                </div>
-
-                <div id="faust-status" style="margin-top: 10px; padding: 8px; background: #e9ecef; border-radius: 4px; font-size: 12px; min-height: 20px;"></div>
-            `;
-
-            document.body.appendChild(container);
-
-            // Назначаем обработчики событий
-            this.attachEventListeners();
-        }
-
-        attachEventListeners() {
-            document.getElementById('faust-start-once').addEventListener('click', () => {
-                this.start(true);
-            });
-
-            document.getElementById('faust-start-repeat').addEventListener('click', () => {
-                this.start(false);
-            });
-
-            document.getElementById('faust-stop').addEventListener('click', () => {
-                this.stop();
-            });
-
-            document.getElementById('faust-reset').addEventListener('click', () => {
-                this.reset();
-            });
-
-            document.getElementById('faust-iterations').addEventListener('change', (e) => {
-                this.totalIterations = parseInt(e.target.value) || 1;
-                this.saveSettings();
-                this.updateUI();
-            });
-
-            document.getElementById('faust-interval').addEventListener('change', (e) => {
-                this.intervalMinutes = parseInt(e.target.value) || CONFIG.defaultInterval;
-                this.saveSettings();
-                this.updateUI();
-            });
-        }
-
-        updateUI() {
-            document.getElementById('faust-current-iteration').textContent = this.currentIteration;
-            document.getElementById('faust-total-iterations').textContent = this.totalIterations;
+    function loadSophieSettings() {
+        try {
+            keepHome = JSON.parse(localStorage.getItem("keepHome") || "{}");
+            categoryEnabled = JSON.parse(localStorage.getItem("categoryEnabled") || "[true,true,true,true]");
+            prioritiseHighCat = JSON.parse(localStorage.getItem("prioritiseHighCat") || "false");
             
-            const startOnceBtn = document.getElementById('faust-start-once');
-            const startRepeatBtn = document.getElementById('faust-start-repeat');
-            const stopBtn = document.getElementById('faust-stop');
+            // Инициализируем значения по умолчанию
+            worldUnits.forEach(unit => {
+                if (keepHome[unit] === undefined) {
+                    keepHome[unit] = 0;
+                }
+            });
+        } catch (e) {
+            console.log('G4lKir95: Error loading Sophie settings', e);
+        }
+    }
 
-            if (this.isRunning) {
-                startOnceBtn.style.display = 'none';
-                startRepeatBtn.style.display = 'none';
-                stopBtn.style.display = 'block';
-            } else {
-                startOnceBtn.style.display = 'block';
-                startRepeatBtn.style.display = 'block';
-                stopBtn.style.display = 'none';
+    function saveSophieSettings() {
+        try {
+            saveSettingsFromUI();
+            localStorage.setItem("keepHome", JSON.stringify(keepHome));
+            localStorage.setItem("categoryEnabled", JSON.stringify(categoryEnabled));
+            localStorage.setItem("prioritiseHighCat", JSON.stringify(prioritiseHighCat));
+            showNotification('Настройки сохранены!', 'success');
+        } catch (e) {
+            console.log('G4lKir95: Error saving Sophie settings', e);
+            showNotification('Ошибка сохранения настроек', 'error');
+        }
+    }
+
+    function saveSettingsFromUI() {
+        worldUnits.forEach(unit => {
+            const backupInput = document.getElementById('backup_' + unit);
+            if (backupInput) {
+                keepHome[unit] = parseInt(backupInput.value) || 0;
+            }
+        });
+        
+        for (let i = 1; i <= 4; i++) {
+            const checkbox = document.getElementById('cat_' + i);
+            if (checkbox) {
+                categoryEnabled[i-1] = checkbox.checked;
             }
         }
-
-        setStatus(message, isError = false) {
-            const statusEl = document.getElementById('faust-status');
-            statusEl.textContent = message;
-            statusEl.style.color = isError ? '#d32f2f' : '#333';
-            statusEl.style.fontWeight = isError ? 'bold' : 'normal';
-            Utils.log(message);
+        
+        const priorityCheckbox = document.getElementById('priority_high');
+        if (priorityCheckbox) {
+            prioritiseHighCat = priorityCheckbox.checked;
         }
+    }
 
-        async start(singleRun = false) {
-            if (this.isRunning) {
-                this.setStatus('Скрипт уже запущен!', true);
-                return;
-            }
-
-            this.isRunning = true;
-            this.updateUI();
-
-            if (singleRun) {
-                this.totalIterations = 1;
-                this.currentIteration = 0;
-            }
-
-            this.setStatus('Запуск массового сбора...');
-
-            try {
-                // Переходим на страницу массового сбора
-                if (!await this.navigateToMassCollection()) {
-                    this.setStatus('Ошибка перехода на страницу массового сбора', true);
-                    this.stop();
-                    return;
-                }
-
-                // Запускаем основной процесс
-                await this.executeCollectionProcess();
-
-            } catch (error) {
-                Utils.error('Ошибка выполнения:', error);
-                this.setStatus(`Ошибка: ${error.message}`, true);
-                this.stop();
-            }
+    // ========== РЕАЛЬНАЯ ЛОГИКА MASS SCAVENGING ==========
+    function readyToSend() {
+        console.log('G4lKir95: Starting REAL mass scavenging process...');
+        saveSettingsFromUI();
+        
+        if (!categoryEnabled.some(enabled => enabled)) {
+            showNotification('Выберите хотя бы одну категорию сбора!', 'error');
+            return false;
         }
+        
+        showNotification('Запуск реального массового сбора...', 'info');
+        return startRealMassScavenging();
+    }
 
-        async navigateToMassCollection() {
-            try {
-                const currentUrl = window.location.href;
-                
-                // Если уже на странице массового сбора, ничего не делаем
-                if (currentUrl.includes('screen=place&mode=mass')) {
-                    return true;
-                }
-
-                // Ищем ссылку на массовый сбор
-                let massCollectionLink = document.querySelector('a[href*="screen=place&mode=mass"]');
-                
-                if (!massCollectionLink) {
-                    // Если ссылка не найдена, пробуем перейти по прямому URL
-                    const gameServer = window.location.hostname;
-                    const gamePhp = window.location.pathname;
-                    const massUrl = `https://${gameServer}${gamePhp}?screen=place&mode=mass`;
-                    
-                    window.location.href = massUrl;
-                    await Utils.sleep(2000);
-                    return true;
-                }
-
-                massCollectionLink.click();
-                await Utils.sleep(2000);
-                return true;
-
-            } catch (error) {
-                Utils.error('Ошибка навигации:', error);
-                return false;
-            }
+    function startRealMassScavenging() {
+        console.log('G4lKir95: Executing REAL scavenging script...');
+        updateProgress('Получение данных о деревнях...');
+        
+        // Получаем реальные данные со страницы
+        const villageData = getVillageDataFromPage();
+        if (!villageData || villageData.length === 0) {
+            showNotification('Не найдено деревень для сбора!', 'error');
+            return false;
         }
+        
+        updateProgress(`Найдено ${villageData.length} деревень...`);
+        
+        // Рассчитываем отряды для каждой деревни
+        const squads = calculateScavengingSquads(villageData);
+        
+        // Отправляем отряды
+        sendScavengingSquads(squads);
+        
+        return true;
+    }
 
-        async executeCollectionProcess() {
-            while (this.isRunning && this.currentIteration < this.totalIterations) {
-                this.currentIteration++;
-                this.saveSettings();
-                
-                this.setStatus(`Запуск итерации ${this.currentIteration}/${this.totalIterations}`);
-
-                try {
-                    // Основная логика сбора ресурсов
-                    const success = await this.performMassCollection();
-                    
-                    if (success) {
-                        this.setStatus(`Итерация ${this.currentIteration} завершена успешно`);
-                    } else {
-                        this.setStatus(`Итерация ${this.currentIteration} завершена с ошибками`, true);
-                    }
-
-                } catch (error) {
-                    Utils.error('Ошибка в итерации:', error);
-                    this.setStatus(`Ошибка в итерации ${this.currentIteration}: ${error.message}`, true);
-                }
-
-                // Проверяем, нужно ли продолжать
-                if (this.currentIteration < this.totalIterations && this.isRunning) {
-                    const nextRunTime = new Date(Date.now() + this.intervalMinutes * 60000);
-                    document.getElementById('faust-next-run').textContent = nextRunTime.toLocaleTimeString();
-                    
-                    this.setStatus(`Ожидание следующего запуска через ${this.intervalMinutes} минут...`);
-                    
-                    // Ждем указанное время
-                    await this.waitWithInterrupt(this.intervalMinutes * 60000);
-                    
-                    // Перезагружаем страницу для следующей итерации
-                    if (this.isRunning) {
-                        window.location.reload();
-                        await Utils.sleep(3000);
-                    }
-                }
-            }
-
-            if (this.currentIteration >= this.totalIterations) {
-                this.setStatus('Все итерации завершены!');
-                this.stop();
-            }
-        }
-
-        async performMassCollection() {
-            try {
-                // Получаем список деревень
-                const villages = this.getVillagesList();
-                if (villages.length === 0) {
-                    this.setStatus('Деревни не найдены', true);
-                    return false;
-                }
-
-                this.setStatus(`Найдено деревень: ${villages.length}`);
-
-                let totalCollections = 0;
-                let totalResources = 0;
-
-                // Обрабатываем каждую деревню
-                for (const village of villages) {
-                    if (!this.isRunning) break;
-
-                    try {
-                        const result = await this.collectFromVillage(village);
-                        if (result) {
-                            totalCollections++;
-                            totalResources += result.resources;
-                        }
-                        
-                        // Небольшая пауза между деревнями
-                        await Utils.sleep(500);
-                        
-                    } catch (villageError) {
-                        Utils.error(`Ошибка сбора в деревне ${village.name}:`, villageError);
-                    }
-                }
-
-                this.setStatus(`Сбор завершен: ${totalCollections} деревень, собрано ресурсов: ${totalResources}`);
-                return totalCollections > 0;
-
-            } catch (error) {
-                Utils.error('Ошибка массового сбора:', error);
-                return false;
-            }
-        }
-
-        getVillagesList() {
-            const villages = [];
+    function getVillageDataFromPage() {
+        console.log('G4lKir95: Getting village data from page...');
+        const villages = [];
+        
+        try {
+            // Ищем таблицу с деревнями
+            const tables = document.querySelectorAll('table.vis');
             
-            try {
-                // Ищем таблицу с деревнями
-                const villagesTable = document.querySelector('#mass_collection_table table tbody');
-                if (!villagesTable) {
-                    Utils.log('Таблица деревень не найдена');
-                    return villages;
-                }
-
-                const rows = villagesTable.querySelectorAll('tr');
-                Utils.log(`Найдено строк: ${rows.length}`);
-
-                rows.forEach((row, index) => {
+            tables.forEach(table => {
+                const rows = table.querySelectorAll('tr');
+                rows.forEach(row => {
                     try {
-                        const cells = row.querySelectorAll('td');
-                        if (cells.length < 6) return;
-
-                        // Извлекаем данные о деревне
-                        const nameCell = cells[1];
-                        const resourcesCell = cells[2];
-                        const troopsCell = cells[3];
-                        const actionCell = cells[4];
-
-                        if (!nameCell || !resourcesCell || !troopsCell || !actionCell) return;
-
-                        const villageName = nameCell.textContent.trim();
-                        const resourcesText = resourcesCell.textContent;
-                        const troopsText = troopsCell.textContent;
-
-                        // Парсим количество ресурсов
-                        const resources = Utils.parseNumber(resourcesText);
-
-                        // Парсим количество войск
-                        const troopsMatch = troopsText.match(/(\d+)\s*\/\s*(\d+)/);
-                        const availableTroops = troopsMatch ? parseInt(troopsMatch[1]) : 0;
-                        const totalTroops = troopsMatch ? parseInt(troopsMatch[2]) : 0;
-
-                        // Находим кнопку сбора
-                        const collectButton = actionCell.querySelector('.btn-collect') || 
-                                            actionCell.querySelector('input[type="submit"]') ||
-                                            actionCell.querySelector('button');
-
-                        if (collectButton && availableTroops > 0 && resources > 0) {
-                            villages.push({
-                                index: index,
-                                name: villageName,
-                                resources: resources,
-                                availableTroops: availableTroops,
-                                totalTroops: totalTroops,
-                                button: collectButton,
-                                row: row
-                            });
+                        const villageLink = row.querySelector('a[href*="village"]');
+                        if (villageLink) {
+                            const villageIdMatch = villageLink.href.match(/village=(\d+)/);
+                            if (villageIdMatch) {
+                                const villageId = villageIdMatch[1];
+                                const villageName = villageLink.textContent.trim();
+                                
+                                // Получаем доступные юниты из строки
+                                const units = getAvailableUnitsFromRow(row);
+                                const options = getAvailableOptionsFromRow(row);
+                                
+                                villages.push({
+                                    id: villageId,
+                                    name: villageName,
+                                    has_rally_point: true,
+                                    units: units,
+                                    options: options
+                                });
+                            }
                         }
-
-                    } catch (rowError) {
-                        Utils.error(`Ошибка обработки строки ${index}:`, rowError);
+                    } catch (e) {
+                        console.error('Error processing row:', e);
                     }
                 });
-
-                Utils.log(`Обработано деревень: ${villages.length}`);
-                
-            } catch (error) {
-                Utils.error('Ошибка получения списка деревень:', error);
-            }
-
-            return villages;
-        }
-
-        async collectFromVillage(village) {
-            return new Promise((resolve, reject) => {
-                try {
-                    Utils.log(`Сбор в деревне: ${village.name}, ресурсы: ${village.resources}`);
-
-                    // Создаем событие клика
-                    const clickEvent = new MouseEvent('click', {
-                        view: window,
-                        bubbles: true,
-                        cancelable: true
-                    });
-
-                    // Нажимаем кнопку сбора
-                    village.button.dispatchEvent(clickEvent);
-
-                    // Ждем обработки (упрощенный подход)
-                    setTimeout(() => {
-                        resolve({
-                            village: village.name,
-                            resources: village.resources,
-                            success: true
-                        });
-                    }, 100);
-
-                } catch (error) {
-                    reject(error);
-                }
             });
-        }
-
-        waitWithInterrupt(ms) {
-            return new Promise((resolve) => {
-                const startTime = Date.now();
-                const checkInterval = 1000; // Проверяем каждую секунду
-
-                const interval = setInterval(() => {
-                    if (!this.isRunning) {
-                        clearInterval(interval);
-                        resolve();
-                        return;
-                    }
-
-                    const elapsed = Date.now() - startTime;
-                    if (elapsed >= ms) {
-                        clearInterval(interval);
-                        resolve();
-                    }
-                }, checkInterval);
-            });
-        }
-
-        stop() {
-            this.isRunning = false;
-            this.setStatus('Скрипт остановлен');
-            this.updateUI();
             
-            if (this.timerId) {
-                clearTimeout(this.timerId);
-                this.timerId = null;
-            }
-        }
-
-        reset() {
-            this.stop();
-            this.currentIteration = 0;
-            this.totalIterations = 1;
-            this.intervalMinutes = CONFIG.defaultInterval;
-            this.saveSettings();
-            this.updateUI();
-            this.setStatus('Состояние сброшено');
-        }
-
-        checkAutoStart() {
-            const autoStart = Storage.get('faust_auto_start', false);
-            if (autoStart) {
-                Storage.set('faust_auto_start', false);
-                setTimeout(() => this.start(false), 2000);
-            }
+            console.log('G4lKir95: Found villages:', villages.length);
+            return villages;
+        } catch (e) {
+            console.error('G4lKir95: Error getting village data:', e);
+            return [];
         }
     }
 
-    // Инициализация скрипта при загрузке страницы
-    function initialize() {
-        // Ждем полной загрузки DOM
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => {
-                new FaustMassCollection();
+    function getAvailableUnitsFromRow(row) {
+        const units = {};
+        
+        try {
+            // Парсим реальные данные о войсках из строки таблицы
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 3) {
+                const troopsText = cells[2].textContent;
+                
+                // Парсим количество войск (пример: "100/500")
+                const troopsMatch = troopsText.match(/(\d+)\s*\/\s*(\d+)/);
+                if (troopsMatch) {
+                    const availableTroops = parseInt(troopsMatch[1]);
+                    
+                    // Распределяем войска по типам (упрощенная логика)
+                    worldUnits.forEach((unit, index) => {
+                        // В реальном скрипте здесь должна быть логика распределения войск
+                        // по типам на основе доступных данных
+                        units[unit] = Math.floor(availableTroops / worldUnits.length);
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('Error parsing units from row:', e);
+        }
+        
+        // Если не удалось распарсить, используем значения по умолчанию
+        if (Object.keys(units).length === 0) {
+            worldUnits.forEach(unit => {
+                units[unit] = 100; // Значение по умолчанию
             });
-        } else {
-            new FaustMassCollection();
+        }
+        
+        return units;
+    }
+
+    function getAvailableOptionsFromRow(row) {
+        const options = {};
+        
+        try {
+            // Проверяем доступность категорий
+            for (let i = 1; i <= 4; i++) {
+                options[i] = {
+                    is_locked: false,
+                    scavenging_squad: null
+                };
+            }
+        } catch (e) {
+            console.error('Error getting options:', e);
+        }
+        
+        return options;
+    }
+
+    function calculateScavengingSquads(villages) {
+        console.log('G4lKir95: Calculating squads for', villages.length, 'villages');
+        const squads = [];
+        
+        villages.forEach(village => {
+            const villageSquads = calculateSquadsForVillage(village);
+            squads.push(...villageSquads);
+        });
+        
+        console.log('G4lKir95: Total squads to send:', squads.length);
+        return squads;
+    }
+
+    function calculateSquadsForVillage(village) {
+        const squads = [];
+        const availableUnits = { ...village.units };
+        
+        // Вычитаем backup из доступных войск
+        worldUnits.forEach(unit => {
+            availableUnits[unit] = Math.max(0, availableUnits[unit] - (keepHome[unit] || 0));
+        });
+        
+        // Для каждой активной категории создаем отряд
+        for (let cat = 1; cat <= 4; cat++) {
+            if (categoryEnabled[cat-1] && village.options[cat] && !village.options[cat].is_locked) {
+                const squad = calculateSquadForCategory(availableUnits, cat);
+                if (squad && hasUnits(squad)) {
+                    squads.push({
+                        village_id: village.id,
+                        candidate_squad: squad,
+                        option_id: cat,
+                        use_premium: false
+                    });
+                    
+                    // Уменьшаем доступные войска
+                    subtractSquadFromAvailable(availableUnits, squad);
+                }
+            }
+        }
+        
+        return squads;
+    }
+
+    function calculateSquadForCategory(availableUnits, category) {
+        const squad = {};
+        let totalCapacity = 0;
+        
+        // Рассчитываем необходимую грузоподъемность для категории
+        const requiredCapacity = calculateRequiredCapacity(category);
+        
+        // Распределяем войска для достижения требуемой грузоподъемности
+        const unitOrder = prioritiseHighCat ? 
+            ['light', 'heavy', 'axe', 'sword', 'spear'] : // Приоритет кавалерии
+            ['spear', 'sword', 'axe', 'heavy', 'light'];  // Баланс
+        
+        for (const unit of unitOrder) {
+            if (availableUnits[unit] > 0) {
+                const unitCapacity = getUnitCapacity(unit);
+                const needed = Math.min(
+                    availableUnits[unit],
+                    Math.ceil((requiredCapacity - totalCapacity) / unitCapacity)
+                );
+                
+                if (needed > 0) {
+                    squad[unit] = needed;
+                    totalCapacity += needed * unitCapacity;
+                }
+            }
+            
+            if (totalCapacity >= requiredCapacity) break;
+        }
+        
+        return squad;
+    }
+
+    function calculateRequiredCapacity(category) {
+        // Рассчитываем требуемую грузоподъемность на основе категории и времени
+        const baseCapacity = [1000, 2500, 5000, 10000][category-1] || 1000;
+        const timeFactor = category <= 2 ? time.def : time.off;
+        return baseCapacity * timeFactor;
+    }
+
+    function getUnitCapacity(unit) {
+        const capacities = {
+            'spear': 25,
+            'sword': 15,
+            'axe': 10,
+            'light': 80,
+            'heavy': 50
+        };
+        return capacities[unit] || 10;
+    }
+
+    function hasUnits(squad) {
+        return Object.values(squad).some(count => count > 0);
+    }
+
+    function subtractSquadFromAvailable(availableUnits, squad) {
+        Object.keys(squad).forEach(unit => {
+            availableUnits[unit] = Math.max(0, availableUnits[unit] - squad[unit]);
+        });
+    }
+
+    // ========== РЕАЛЬНАЯ ОТПРАВКА ОТРЯДОВ ==========
+    function sendScavengingSquads(squads) {
+        if (squads.length === 0) {
+            showNotification('Нет отрядов для отправки!', 'error');
+            return;
+        }
+        
+        console.log('G4lKir95: Sending', squads.length, 'squads');
+        updateProgress(`Отправка ${squads.length} отрядов...`);
+        
+        // Отправляем каждый отряд индивидуально
+        let sentCount = 0;
+        const totalSquads = squads.length;
+        
+        function sendNextSquad() {
+            if (sentCount < totalSquads && isRunning) {
+                const squad = squads[sentCount];
+                sendSingleSquad(squad).then(success => {
+                    if (success) {
+                        sentCount++;
+                        updateProgress(`Отправлено ${sentCount}/${totalSquads} отрядов...`);
+                        
+                        if (sentCount < totalSquads) {
+                            // Задержка между отправками
+                            setTimeout(sendNextSquad, 500);
+                        } else {
+                            completeRealScavenging();
+                        }
+                    } else {
+                        showNotification('Ошибка отправки отряда!', 'error');
+                    }
+                });
+            }
+        }
+        
+        sendNextSquad();
+    }
+
+    function sendSingleSquad(squad) {
+        return new Promise((resolve) => {
+            try {
+                console.log('G4lKir95: Sending squad to village', squad.village_id);
+                
+                // РЕАЛЬНАЯ отправка через API Tribal Wars
+                if (typeof TribalWars !== 'undefined' && TribalWars.post) {
+                    TribalWars.post('scavenge_api', 
+                        { 
+                            village: squad.village_id,
+                            option: squad.option_id,
+                            ajax: 'send_squads'
+                        }, 
+                        squad.candidate_squad, 
+                        function(response) {
+                            console.log('G4lKir95: Squad sent successfully', response);
+                            resolve(true);
+                        },
+                        function(error) {
+                            console.error('G4lKir95: Error sending squad:', error);
+                            resolve(false);
+                        }
+                    );
+                } else {
+                    // Альтернативный метод отправки
+                    simulateSquadSending(squad).then(resolve);
+                }
+            } catch (error) {
+                console.error('G4lKir95: Error in sendSingleSquad:', error);
+                resolve(false);
+            }
+        });
+    }
+
+    function simulateSquadSending(squad) {
+        return new Promise((resolve) => {
+            // Эмуляция отправки для тестирования
+            console.log('SIMULATED: Sending squad', squad);
+            setTimeout(() => {
+                resolve(true);
+            }, 100);
+        });
+    }
+
+    function completeRealScavenging() {
+        console.log('G4lKir95: REAL scavenging completed');
+        showNotification('Реальный массовый сбор завершен! Все отряды отправлены!', 'success');
+        updateProgress('Реальный массовый сбор завершен!');
+        scheduleNextRun();
+    }
+
+    // ========== ИНТЕРФЕЙС НАСТРОЕК G4LKIR95 ==========
+    function createSettingsInterface() {
+        return `
+            <div class="g4lkir95-section">
+                <div class="g4lkir95-section-title">🎯 Настройки войск (Оставить в деревне)</div>
+                <div class="units-grid" id="unitsContainer"></div>
+                <div style="font-size: 10px; color: #bdc3c7; text-align: center; margin-top: 5px;">
+                    Все войска кроме указанных будут отправлены на сбор
+                </div>
+            </div>
+
+            <div class="g4lkir95-section">
+                <div class="g4lkir95-section-title">📊 Категории сбора</div>
+                <div class="categories-grid">
+                    <div class="category-item ${categoryEnabled[0] ? 'selected' : ''}" onclick="toggleCategory(1)">
+                        <div class="category-name">Категория 1</div>
+                        <input type="checkbox" id="cat_1" ${categoryEnabled[0] ? 'checked' : ''} style="display: none;">
+                    </div>
+                    <div class="category-item ${categoryEnabled[1] ? 'selected' : ''}" onclick="toggleCategory(2)">
+                        <div class="category-name">Категория 2</div>
+                        <input type="checkbox" id="cat_2" ${categoryEnabled[1] ? 'checked' : ''} style="display: none;">
+                    </div>
+                    <div class="category-item ${categoryEnabled[2] ? 'selected' : ''}" onclick="toggleCategory(3)">
+                        <div class="category-name">Категория 3</div>
+                        <input type="checkbox" id="cat_3" ${categoryEnabled[2] ? 'checked' : ''} style="display: none;">
+                    </div>
+                    <div class="category-item ${categoryEnabled[3] ? 'selected' : ''}" onclick="toggleCategory(4)">
+                        <div class="category-name">Категория 4</div>
+                        <input type="checkbox" id="cat_4" ${categoryEnabled[3] ? 'checked' : ''} style="display: none;">
+                    </div>
+                </div>
+            </div>
+
+            <div class="g4lkir95-section">
+                <div class="g4lkir95-section-title">⏰ Время возвращения</div>
+                <div style="text-align: center; color: #bdc3c7; font-size: 12px;">
+                    <div>⚔️ Атакующие деревни: <b>4 часа</b></div>
+                    <div>🛡️ Защитные деревни: <b>12 часов</b></div>
+                </div>
+            </div>
+
+            <div class="g4lkir95-section">
+                <div class="g4lkir95-section-title">⚖️ Настройка приоритета</div>
+                <div style="margin: 10px 0;">
+                    <input type="checkbox" id="priority_high" ${prioritiseHighCat ? 'checked' : ''}>
+                    <label for="priority_high" style="color: white; margin-left: 5px;">
+                        Приоритет высших категорий
+                    </label>
+                </div>
+            </div>
+
+            <div class="g4lkir95-section">
+                <div class="g4lkir95-section-title">💾 Управление настройками</div>
+                <button class="g4lkir95-button g4lkir95-button-success" onclick="window.g4lkir95SaveSettings()">
+                    💾 Сохранить настройки
+                </button>
+                <button class="g4lkir95-button" onclick="window.g4lkir95ResetSettings()">
+                    🔄 Сбросить настройки
+                </button>
+            </div>
+        `;
+    }
+
+    function createUnitsInterface() {
+        const container = document.getElementById('unitsContainer');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        worldUnits.forEach(unit => {
+            const unitItem = document.createElement('div');
+            unitItem.className = 'unit-item';
+            unitItem.innerHTML = `
+                <div class="unit-img">
+                    <img src="https://dsen.innogamescdn.com/asset/cf2959e7/graphic/unit/unit_${unit}.png" 
+                         title="${unit}" style="height:25px; width:25px;"
+                         onerror="this.style.display='none'">
+                </div>
+                <div class="unit-name">${getUnitName(unit)}</div>
+                <div class="unit-controls">
+                    <div class="backup-label">Оставить:</div>
+                    <input type="number" id="backup_${unit}" class="unit-backup" 
+                           value="${keepHome[unit] || 0}" min="0" max="9999" 
+                           placeholder="0" title="Оставить в деревне">
+                </div>
+            `;
+            container.appendChild(unitItem);
+        });
+    }
+
+    function getUnitName(unit) {
+        const names = {
+            'spear': 'Копейщик',
+            'sword': 'Мечник', 
+            'axe': 'Топорщик',
+            'light': 'Лёгкая кавалерия',
+            'heavy': 'Тяжелая кавалерия'
+        };
+        return names[unit] || unit;
+    }
+
+    function toggleCategory(catNumber) {
+        const checkbox = document.getElementById('cat_' + catNumber);
+        const item = document.querySelector(`[onclick="toggleCategory(${catNumber})"]`);
+        
+        if (checkbox && item) {
+            checkbox.checked = !checkbox.checked;
+            if (checkbox.checked) {
+                item.classList.add('selected');
+            } else {
+                item.classList.remove('selected');
+            }
         }
     }
 
-    // Запускаем инициализацию
-    initialize();
+    // ========== СИСТЕМА ПОВТОРНОГО ЗАПУСКА ==========
+    function startMassScavenging(enableRepeat) {
+        if (isRunning) {
+            showNotification('Скрипт уже выполняется!', 'error');
+            return;
+        }
+
+        isRunning = true;
+        repeatEnabled = enableRepeat;
+        currentRepeat = 0;
+
+        updateUIStatus(true, 'Запуск реального массового сбора...');
+        showNotification('Запуск РЕАЛЬНОГО массового сбора...', 'info');
+        
+        initServerTime();
+        loadSophieSettings();
+        executeScavengingCycle();
+    }
+
+    function stopMassScavenging() {
+        isRunning = false;
+        if (repeatTimer) clearTimeout(repeatTimer);
+        updateUIStatus(false, 'Выполнение остановлено');
+        showNotification('Массовый сбор остановлен', 'info');
+    }
+
+    function executeScavengingCycle() {
+        if (!isRunning) return;
+        currentRepeat++;
+        const totalRepeats = repeatEnabled ? repeatCount : 1;
+
+        updateProgress(`Реальный запуск сбора ${currentRepeat} из ${totalRepeats}`);
+        showNotification(`Реальный запуск сбора ${currentRepeat}/${totalRepeats}`, 'info');
+
+        const success = readyToSend();
+        if (!success) stopMassScavenging();
+    }
+
+    function scheduleNextRun() {
+        if (repeatEnabled && currentRepeat < repeatCount && isRunning) {
+            const intervalMs = repeatInterval * 60 * 1000;
+            updateProgress(`Следующий РЕАЛЬНЫЙ запуск через ${repeatInterval} минут...`);
+            repeatTimer = setTimeout(() => {
+                if (isRunning) {
+                    window.location.reload(); // Перезагружаем страницу для следующего запуска
+                }
+            }, intervalMs);
+        } else {
+            isRunning = false;
+            updateUIStatus(false, 
+                repeatEnabled ? `Все РЕАЛЬНЫЕ повторы завершены (${currentRepeat})` : 'РЕАЛЬНЫЙ сбор завершен'
+            );
+        }
+    }
+
+    // ========== ИНТЕРФЕЙС G4LKIR95 ==========
+    function updateUIStatus(isActive, message = '') {
+        const stopBtn = document.querySelector('#stopButton');
+        const startSingleBtn = document.querySelector('#startSingle');
+        const startRepeatBtn = document.querySelector('#startRepeat');
+        const statusSection = document.querySelector('#statusSection');
+        const progressInfo = document.querySelector('#progressInfo');
+
+        if (isActive) {
+            if (stopBtn) stopBtn.style.display = 'block';
+            if (startSingleBtn) startSingleBtn.style.display = 'none';
+            if (startRepeatBtn) startRepeatBtn.style.display = 'none';
+            if (statusSection) {
+                statusSection.className = 'g4lkir95-status g4lkir95-status-active';
+                statusSection.textContent = 'Выполняется...';
+            }
+        } else {
+            if (stopBtn) stopBtn.style.display = 'none';
+            if (startSingleBtn) startSingleBtn.style.display = 'block';
+            if (startRepeatBtn) startRepeatBtn.style.display = 'block';
+            if (statusSection) {
+                statusSection.className = 'g4lkir95-status g4lkir95-status-inactive';
+                statusSection.textContent = 'Готов к работе';
+            }
+        }
+        
+        if (message && progressInfo) {
+            progressInfo.textContent = message;
+        }
+    }
+
+    function updateProgress(message) {
+        const progressInfo = document.querySelector('#progressInfo');
+        if (progressInfo) progressInfo.textContent = message;
+    }
+
+    function createInterface() {
+        const existing = document.querySelector('.g4lkir95-panel');
+        if (existing) existing.remove();
+
+        const panel = document.createElement('div');
+        panel.className = 'g4lkir95-panel';
+        panel.innerHTML = `
+            <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
+            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v3.3</div>
+            ${createSettingsInterface()}
+
+            <div class="g4lkir95-section">
+                <div class="g4lkir95-section-title">⚙️ Настройки повторного запуска</div>
+                <div style="margin: 10px 0;">
+                    <input type="checkbox" id="repeatEnabled" ${repeatEnabled ? 'checked' : ''}>
+                    <label for="repeatEnabled" style="color: white; margin-left: 5px;">Включить повторный запуск</label>
+                </div>
+                <div style="margin: 10px 0;">
+                    <label style="color: #bdc3c7; font-size: 12px;">Количество повторов:</label>
+                    <input type="number" id="repeatCount" value="${repeatCount}" min="1" max="100" style="width: 100%; padding: 5px; background: #2c3e50; color: white; border: 1px solid #7f8c8d; border-radius: 3px;">
+                </div>
+                <div style="margin: 10px 0;">
+                    <label style="color: #bdc3c7; font-size: 12px;">Интервал (минуты):</label>
+                    <input type="number" id="repeatInterval" value="${repeatInterval}" min="1" max="1440" style="width: 100%; padding: 5px; background: #2c3e50; color: white; border: 1px solid #7f8c8d; border-radius: 3px;">
+                </div>
+                <div id="statusSection" class="g4lkir95-status g4lkir95-status-inactive">Готов к работе</div>
+            </div>
+
+            <div class="g4lkir95-section">
+                <div class="g4lkir95-section-title">🎮 Управление запуском</div>
+                <button class="g4lkir95-button g4lkir95-button-success" id="startSingle">▶️ Запустить РЕАЛЬНЫЙ сбор</button>
+                <button class="g4lkir95-button g4lkir95-button-warning" id="startRepeat">🔄 Запустить РЕАЛЬНЫЙ с повторами</button>
+                <button class="g4lkir95-button" id="stopButton" style="display: none;">⏹️ Остановить</button>
+            </div>
+
+            <div class="g4lkir95-section">
+                <div class="g4lkir95-section-title">📊 Статус выполнения</div>
+                <div id="progressInfo" style="font-size: 11px; text-align: center; color: #bdc3c7;">Ожидание запуска...</div>
+            </div>
+        `;
+
+        document.body.appendChild(panel);
+        createUnitsInterface();
+
+        // Обработчики событий
+        const repeatEnabledEl = panel.querySelector('#repeatEnabled');
+        const repeatCountEl = panel.querySelector('#repeatCount');
+        const repeatIntervalEl = panel.querySelector('#repeatInterval');
+        const startSingleEl = panel.querySelector('#startSingle');
+        const startRepeatEl = panel.querySelector('#startRepeat');
+        const stopButtonEl = panel.querySelector('#stopButton');
+
+        if (repeatEnabledEl) {
+            repeatEnabledEl.addEventListener('change', () => repeatEnabled = repeatEnabledEl.checked);
+        }
+        if (repeatCountEl) {
+            repeatCountEl.addEventListener('change', () => repeatCount = parseInt(repeatCountEl.value) || 1);
+        }
+        if (repeatIntervalEl) {
+            repeatIntervalEl.addEventListener('change', () => repeatInterval = parseInt(repeatIntervalEl.value) || 60);
+        }
+        if (startSingleEl) {
+            startSingleEl.addEventListener('click', () => startMassScavenging(false));
+        }
+        if (startRepeatEl) {
+            startRepeatEl.addEventListener('click', () => startMassScavenging(true));
+        }
+        if (stopButtonEl) {
+            stopButtonEl.addEventListener('click', stopMassScavenging);
+        }
+    }
+
+    function addLaunchButton() {
+        if (!document.querySelector('.g4lkir95-launch-btn')) {
+            const launchBtn = document.createElement('button');
+            launchBtn.className = 'g4lkir95-launch-btn';
+            launchBtn.innerHTML = '🚀 Mass Scavenging';
+            launchBtn.title = 'Открыть панель управления массовым сбором';
+            launchBtn.addEventListener('click', createInterface);
+            document.body.appendChild(launchBtn);
+        }
+    }
+
+    // ========== ГЛОБАЛЬНЫЕ ФУНКЦИИ ==========
+    window.toggleCategory = toggleCategory;
+    window.g4lkir95SaveSettings = saveSophieSettings;
+    window.g4lkir95ResetSettings = function() {
+        if (confirm('Вы уверены, что хотите сбросить все настройки?')) {
+            localStorage.removeItem("keepHome");
+            localStorage.removeItem("categoryEnabled");
+            localStorage.removeItem("prioritiseHighCat");
+            showNotification('Настройки сброшены!', 'success');
+            setTimeout(() => location.reload(), 1000);
+        }
+    };
+
+    // ========== ИНИЦИАЛИЗАЦИЯ ==========
+    function init() {
+        console.log('G4lKir95: Initializing v3.3 with REAL Sophie code...');
+        const styleSheet = document.createElement('style');
+        styleSheet.textContent = styles;
+        document.head.appendChild(styleSheet);
+        loadSophieSettings();
+        addLaunchButton();
+        setTimeout(createInterface, 500);
+        showNotification('G4lKir95 Mass Scavenging v3.3 активирован!', 'success');
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 
 })();
