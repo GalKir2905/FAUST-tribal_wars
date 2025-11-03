@@ -2126,6 +2126,7 @@
     };
     window.g4lkir95ClearLogs = clearDebugLogs;
 
+    
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
         console.log('G4lKir95: Initializing v4.9.3 with improved interface detection...');
