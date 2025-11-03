@@ -1074,56 +1074,50 @@
         try {
             addDebugLog('Поиск элементов управления категориями...', 'info');
             
-            const buttons = row.querySelectorAll('button, input[type="submit"], .btn');
-            const selects = row.querySelectorAll('select');
+            // НОВЫЙ МЕТОД: поиск по классам option-
+            const categoryElements = row.querySelectorAll('[class*="option-"]');
+            addDebugLog(`Найдено элементов категорий: ${categoryElements.length}`, 'info');
             
-            addDebugLog(`Найдено: кнопок=${buttons.length}, селектов=${selects.length}`, 'info');
-            
-            if (selects.length > 0) {
-                // Используем выпадающий список
-                const select = selects[0];
-                for (let i = 1; i <= 4; i++) {
-                    options[i] = {
-                        is_locked: false,
-                        scavenging_squad: null,
-                        available: true,
-                        name: categoryNames[i] || `Категория ${i}`
-                    };
-                }
-                addDebugLog('Используем выпадающий список категорий', 'success');
-            } else if (buttons.length >= 4) {
-                // Используем отдельные кнопки для каждой категории
-                for (let i = 1; i <= 4; i++) {
-                    const button = buttons[i-1];
-                    const isLocked = button.disabled || 
-                                    button.classList.contains('disabled') ||
-                                    button.textContent.includes('Locked') ||
-                                    button.textContent.includes('Заблокировано');
+            for (let i = 1; i <= 4; i++) {
+                let isAvailable = true;
+                let isLocked = false;
+                
+                // Ищем элемент категории
+                const categoryElement = Array.from(categoryElements).find(el => 
+                    el.className.includes(`option-${i}`)
+                );
+                
+                if (categoryElement) {
+                    const className = categoryElement.className;
                     
-                    options[i] = {
-                        is_locked: isLocked,
-                        scavenging_squad: null,
-                        available: !isLocked,
-                        name: categoryNames[i] || `Категория ${i}`
-                    };
+                    // Определяем статус категории по классам
+                    isLocked = className.includes('option-locked') || 
+                              className.includes('status-locked') ||
+                              className.includes('status-unavailable');
                     
-                    addDebugLog(`Категория ${i}: ${isLocked ? 'заблокирована' : 'доступна'}`, isLocked ? 'warning' : 'success');
+                    isAvailable = !isLocked && 
+                                (className.includes('status-active') || 
+                                 className.includes('status-inactive'));
+                    
+                    addDebugLog(`Категория ${i}: ${isLocked ? 'заблокирована' : 'доступна'}`, 
+                               isLocked ? 'warning' : 'success');
+                } else {
+                    isAvailable = false;
+                    isLocked = true;
+                    addDebugLog(`Категория ${i}: не найдена`, 'warning');
                 }
-            } else {
-                // Если не удалось определить, считаем все доступными
-                for (let i = 1; i <= 4; i++) {
-                    options[i] = {
-                        is_locked: false,
-                        scavenging_squad: null,
-                        available: true,
-                        name: categoryNames[i] || `Категория ${i}`
-                    };
-                }
-                addDebugLog('Категории: все доступны (по умолчанию)', 'info');
+                
+                options[i] = {
+                    is_locked: isLocked,
+                    scavenging_squad: null,
+                    available: isAvailable,
+                    name: categoryNames[i] || `Категория ${i}`
+                };
             }
             
         } catch (e) {
             addDebugLog(`Ошибка определения категорий: ${e.message}`, 'error');
+            // Резервные настройки
             for (let i = 1; i <= 4; i++) {
                 options[i] = {
                     is_locked: false,
@@ -1511,171 +1505,92 @@
     }
 
     function sendSquadToVillage(row, squad) {
-    try {
-        addDebugLog(`Отправка отряда в деревню ${squad.village_name}...`, 'info');
-        analyzeInterface(row);
-        // Более детальный поиск элементов управления
-        const buttons = row.querySelectorAll('button, input[type="submit"], input[type="button"], .btn, .button');
-        const selects = row.querySelectorAll('select');
-        
-        addDebugLog(`Найдено элементов в строке: кнопок=${buttons.length}, селектов=${selects.length}`, 'info');
-        
-        // Логируем все найденные элементы для отладки
-        buttons.forEach((btn, index) => {
-            const text = btn.textContent || btn.value || '';
-            addDebugLog(`Кнопка ${index}: "${text}"`, 'info');
-        });
-        
-        selects.forEach((select, index) => {
-            addDebugLog(`Селект ${index}: options=${select.options.length}`, 'info');
-        });
-
-        // Сначала пытаемся найти и выбрать категорию
-        let categorySelected = false;
-        
-        if (selects.length > 0) {
-            // Используем выпадающий список для выбора категории
-            const select = selects[0];
-            addDebugLog(`Установка категории ${squad.option_id} в выпадающем списке`, 'info');
+        try {
+            addDebugLog(`Отправка отряда в деревню ${squad.village_name}...`, 'info');
             
-            // Ищем опцию с нужной категорией
-            let optionFound = false;
-            for (let i = 0; i < select.options.length; i++) {
-                const option = select.options[i];
-                const optionText = option.textContent.toLowerCase();
-                
-                // Проверяем, соответствует ли опция нашей категории
-                if (isOptionForCategory(optionText, squad.option_id) || option.value == squad.option_id) {
-                    select.value = option.value;
-                    optionFound = true;
-                    addDebugLog(`✅ Выбрана категория: ${option.textContent}`, 'success');
-                    break;
-                }
-            }
+            // НОВЫЙ МЕТОД: поиск по классам option-
+            const categoryElements = row.querySelectorAll('[class*="option-"]');
+            addDebugLog(`Найдено элементов категорий: ${categoryElements.length}`, 'info');
             
-            if (!optionFound && select.options.length > squad.option_id - 1) {
-                // Если не нашли по тексту, используем индекс
-                select.selectedIndex = squad.option_id - 1;
-                addDebugLog(`✅ Выбрана категория по индексу: ${squad.option_id}`, 'success');
-                optionFound = true;
-            }
-            
-            if (optionFound) {
-                // Триггерим событие изменения
-                select.dispatchEvent(new Event('change', { bubbles: true }));
-                categorySelected = true;
-                
-                // Даем время на обновление интерфейса
-                setTimeout(() => {
-                    // Ищем кнопку отправки после выбора категории
-                    const sendButton = findSendButton(row);
-                    if (sendButton && !sendButton.disabled) {
-                        addDebugLog('Найдена кнопка отправки, кликаем...', 'success');
-                        sendButton.click();
-                    } else {
-                        addDebugLog('Кнопка отправки не найдена или заблокирована после выбора категории', 'error');
+            // Логируем все найденные элементы категорий
+            categoryElements.forEach((element, index) => {
+                const className = element.className || '';
+                const text = element.textContent || '';
+                addDebugLog(`Категория ${index}: class="${className}" text="${text.trim()}"`, 'info');
+            });
+    
+            // Ищем нужную категорию по номеру
+            const targetCategoryClass = `option-${squad.option_id}`;
+            let categoryElement = null;
+    
+            for (let element of categoryElements) {
+                if (element.className.includes(targetCategoryClass)) {
+                    // Проверяем, не заблокирована ли категория
+                    if (element.className.includes('option-locked') || 
+                        element.className.includes('status-locked') ||
+                        element.className.includes('status-unavailable')) {
+                        addDebugLog(`Категория ${squad.option_id} заблокирована`, 'warning');
+                        return false;
                     }
-                }, 500);
-                
-                return true;
-            }
-        } else if (buttons.length > 0) {
-            // Пробуем найти отдельные кнопки для каждой категории
-            let categoryButton = null;
-            
-            for (let i = 0; i < buttons.length; i++) {
-                const button = buttons[i];
-                const text = (button.textContent || button.value || '').toLowerCase();
-                
-                // Проверяем, соответствует ли кнопка категории
-                if (!button.disabled && isButtonForCategory(text, squad.option_id)) {
-                    categoryButton = button;
-                    addDebugLog(`✅ Найдена кнопка для категории ${squad.category_name}`, 'success');
-                    break;
-                }
-            }
-            
-            if (categoryButton) {
-                // Кликаем на кнопку категории
-                categoryButton.click();
-                categorySelected = true;
-                
-                // Даем время на применение категории
-                setTimeout(() => {
-                    // Ищем кнопку отправки
-                    const sendButton = findSendButton(row);
-                    if (sendButton && !sendButton.disabled) {
-                        addDebugLog('Найдена кнопка отправки, кликаем...', 'success');
-                        sendButton.click();
-                    } else {
-                        addDebugLog('Кнопка отправки не найдена или заблокирована', 'error');
-                    }
-                }, 500);
-                
-                return true;
-            } else {
-                addDebugLog('❌ Не найдена кнопка для выбора категории', 'error');
-                
-                // Альтернативная стратегия: ищем кнопки с числовыми значениями (1, 2, 3, 4)
-                for (let i = 0; i < buttons.length; i++) {
-                    const button = buttons[i];
-                    const text = (button.textContent || button.value || '').trim();
                     
-                    if (!button.disabled && (text === squad.option_id.toString() || 
-                        text === 'Cat. ' + squad.option_id || 
-                        text === 'Кат. ' + squad.option_id)) {
-                        addDebugLog(`✅ Найдена числовая кнопка категории: ${text}`, 'success');
-                        button.click();
-                        categorySelected = true;
-                        
-                        setTimeout(() => {
-                            const sendButton = findSendButton(row);
-                            if (sendButton && !sendButton.disabled) {
-                                sendButton.click();
-                            }
-                        }, 500);
-                        
-                        return true;
+                    // Проверяем, активна ли категория
+                    if (element.className.includes('status-active') || 
+                        element.className.includes('status-inactive')) {
+                        categoryElement = element;
+                        addDebugLog(`✅ Найдена категория ${squad.option_id}`, 'success');
+                        break;
                     }
                 }
             }
-        }
-        
-        if (!categorySelected) {
-            addDebugLog('❌ Не удалось выбрать категорию, пробуем альтернативный метод...', 'warning');
+    
+            if (!categoryElement) {
+                addDebugLog(`❌ Категория ${squad.option_id} не найдена или недоступна`, 'error');
+                return false;
+            }
+    
+            // Ищем кликабельный элемент внутри категории
+            let clickableElement = categoryElement.querySelector('a, button, [onclick], .clickable');
             
-            // Альтернативный метод: ищем любые элементы, которые могут быть селекторами категорий
-            const allInputs = row.querySelectorAll('input[type="radio"], input[type="checkbox"]');
-            for (let input of allInputs) {
-                const name = input.name || '';
-                const value = input.value || '';
-                
-                if (name.includes('category') || name.includes('cat') || name.includes('option')) {
-                    if (value == squad.option_id || input.id.includes(squad.option_id)) {
-                        addDebugLog(`✅ Найден элемент выбора категории: ${name}=${value}`, 'success');
-                        input.click();
-                        categorySelected = true;
-                        
-                        setTimeout(() => {
-                            const sendButton = findSendButton(row);
-                            if (sendButton && !sendButton.disabled) {
-                                sendButton.click();
-                            }
-                        }, 500);
-                        
-                        return true;
+            if (!clickableElement) {
+                // Если нет отдельного кликабельного элемента, кликаем на саму категорию
+                clickableElement = categoryElement;
+            }
+    
+            // Кликаем на категорию
+            addDebugLog(`Кликаем на категорию ${squad.option_id}...`, 'info');
+            clickableElement.click();
+    
+            // Ждем обновления интерфейса
+            setTimeout(() => {
+                // Ищем кнопку отправки
+                const sendButton = findSendButton(row);
+                if (sendButton && !sendButton.disabled) {
+                    addDebugLog('✅ Найдена кнопка отправки, кликаем...', 'success');
+                    sendButton.click();
+                    
+                    // Успешная отправка
+                    setTimeout(() => {
+                        showNotification(`Отряд отправлен: ${squad.village_name} -> ${squad.category_name}`, 'success');
+                    }, 500);
+                    
+                } else {
+                    addDebugLog('❌ Кнопка отправки не найдена или заблокирована после выбора категории', 'error');
+                    
+                    // Альтернативная стратегия: ищем форму и отправляем ее
+                    const form = row.querySelector('form');
+                    if (form) {
+                        addDebugLog('Пробуем отправить форму напрямую...', 'info');
+                        form.submit();
                     }
                 }
-            }
+            }, 1000);
+    
+            return true;
+            
+        } catch (e) {
+            addDebugLog(`Ошибка при отправке: ${e.message}`, 'error');
+            return false;
         }
-        
-        addDebugLog('❌ Не удалось отправить отряд: не найдены элементы выбора категории', 'error');
-        return false;
-        
-    } catch (e) {
-        addDebugLog(`Ошибка при отправке: ${e.message}`, 'error');
-        return false;
-    }
     }
 
     
@@ -1744,50 +1659,57 @@
 
     function findSendButton(row) {
         // Расширяем поиск кнопки отправки
-        const buttons = row.querySelectorAll('button, input[type="submit"], input[type="button"], .btn, .button');
+        const buttons = row.querySelectorAll('button, input[type="submit"], input[type="button"]');
         
-        // Сначала ищем по точному тексту
+        // Приоритетные селекторы для кнопки отправки
+        const sendButtonSelectors = [
+            'input[value*="Отправить"]',
+            'input[value*="Send"]', 
+            'button[type="submit"]',
+            '.btn-confirm',
+            '.btn-send',
+            '[class*="send"]',
+            '[class*="submit"]'
+        ];
+        
+        // Сначала ищем по приоритетным селекторам
+        for (const selector of sendButtonSelectors) {
+            const button = row.querySelector(selector);
+            if (button && !button.disabled) {
+                addDebugLog(`Найдена кнопка отправки через селектор: ${selector}`, 'success');
+                return button;
+            }
+        }
+        
+        // Затем ищем по тексту
         for (let button of buttons) {
             const text = (button.textContent || button.value || '').toLowerCase().trim();
-            if ((text === 'отправить' || text === 'send' || text === 'сбор') && !button.disabled) {
-                return button;
-            }
-        }
-        
-        // Затем ищем по частичному совпадению
-        for (let button of buttons) {
-            const text = (button.textContent || button.value || '').toLowerCase();
-            if ((text.includes('отправ') || text.includes('send') || text.includes('сбор')) && 
-                !button.disabled) {
-                return button;
-            }
-        }
-        
-        // Если не нашли по тексту, ищем по классам и ID
-        for (let button of buttons) {
-            const className = button.className || '';
-            const id = button.id || '';
+            const isSendButton = text === 'отправить' || 
+                               text === 'send' || 
+                               text === 'сбор' ||
+                               text.includes('отправ') ||
+                               text.includes('send');
             
-            if ((className.includes('send') || className.includes('submit') || 
-                 id.includes('send') || id.includes('submit')) && !button.disabled) {
+            if (isSendButton && !button.disabled) {
+                addDebugLog(`Найдена кнопка отправки по тексту: "${text}"`, 'success');
                 return button;
             }
         }
         
-        // Если все еще не нашли, возвращаем первую доступную кнопку, которая не является кнопкой категории
+        // Если не нашли, возвращаем первую доступную кнопку, которая не является категорией
         for (let button of buttons) {
             const text = (button.textContent || button.value || '').toLowerCase();
-            if (!button.disabled && 
-                !isButtonForCategory(text, 1) && 
-                !isButtonForCategory(text, 2) && 
-                !isButtonForCategory(text, 3) && 
-                !isButtonForCategory(text, 4) &&
-                !text.includes('+20%') && // Исключаем кнопки бонуса
-                !text.includes('premium')) {
+            const isCategoryButton = text.includes('+20%') || 
+                                   text.includes('premium') ||
+                                   button.className.includes('option-');
+            
+            if (!button.disabled && !isCategoryButton) {
+                addDebugLog(`Используем альтернативную кнопку: "${text}"`, 'warning');
                 return button;
             }
         }
         
+        addDebugLog('❌ Не найдена подходящая кнопка отправки', 'error');
         return null;
     }
 
@@ -2006,6 +1928,25 @@
         }
     }
 
+    function debugInterfaceStructure(row) {
+        addDebugLog('=== ДЕТАЛЬНАЯ СТРУКТУРА ИНТЕРФЕЙСА ===', 'info');
+        
+        // Ищем все контейнеры с категориями
+        const containers = row.querySelectorAll('[class*="scavenge"], [class*="option"], [class*="category"]');
+        containers.forEach((container, index) => {
+            const className = container.className;
+            const html = container.innerHTML.substring(0, 200);
+            addDebugLog(`Контейнер ${index}: ${className}`, 'info');
+            addDebugLog(`HTML: ${html}...`, 'info');
+        });
+        
+        // Ищем все формы
+        const forms = row.querySelectorAll('form');
+        forms.forEach((form, index) => {
+            addDebugLog(`Форма ${index}: action="${form.action}" method="${form.method}"`, 'info');
+        });
+    }
+
     function createInterface() {
         const existing = document.querySelector('.g4lkir95-panel');
         if (existing) existing.remove();
@@ -2014,7 +1955,7 @@
         panel.className = 'g4lkir95-panel';
         panel.innerHTML = `
             <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
-            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.9.1</div>
+            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.9.2</div>
             ${createSettingsInterface()}
 
             <div class="g4lkir95-section">
@@ -2109,7 +2050,7 @@
 
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
-        console.log('G4lKir95: Initializing v4.9.1 with improved interface detection...');
+        console.log('G4lKir95: Initializing v4.9.2 with improved interface detection...');
         
         // Проверяем, что мы на правильной странице
         if (window.location.href.indexOf('mode=scavenge_mass') === -1) {
@@ -2124,8 +2065,8 @@
         loadSophieSettings();
         addLaunchButton();
         setTimeout(createInterface, 500);
-        addDebugLog('G4lKir95 Mass Scavenging v4.9.1 активирован! Улучшенный поиск интерфейса.', 'success');
-        showNotification('G4lKir95 Mass Scavenging v4.9.1 активирован!', 'success');
+        addDebugLog('G4lKir95 Mass Scavenging v4.9.2 активирован! Улучшенный поиск интерфейса.', 'success');
+        showNotification('G4lKir95 Mass Scavenging v4.9.2 активирован!', 'success');
     }
 
     if (document.readyState === 'loading') {
