@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         FAUST Tribal Wars Mass Scavenging v4.1
+// @name         FAUST Tribal Wars Mass Scavenging v4.2
 // @namespace    http://tampermonkey.net/
-// @version      4.1
+// @version      4.2
 // @description  Массовый сбор ресурсов с улучшенным поиском таблицы
 // @author       G4lKir95 & Sophie
 // @match        https://*.tribalwars.com.ua/game.php*
@@ -516,102 +516,127 @@
         const villages = [];
         
         try {
-            // УЛУЧШЕННЫЙ поиск таблицы с деревнями для массового сбора
-            const possibleTables = [
+            // УЛУЧШЕННЫЙ поиск таблицы массового сбора
+            addDebugLog('=== ПОИСК ТАБЛИЦЫ МАССОВОГО СБОРА ===', 'info');
+            
+            // Сначала ищем по специфичным селекторам для массового сбора
+            const specificSelectors = [
+                '#scavenge_mass_content table',
+                '.mass_scavenge_table',
                 'table#villages_table',
                 'table.vis.villages',
-                '.mass_scavenge_table',
-                '#scavenge_mass_content table',
-                'table.vis:not(:first-child)',
-                'table'
+                '.villages_list table',
+                '#villages_table'
             ];
             
             let mainTable = null;
-            let tableSource = '';
             
-            // Ищем таблицу, которая содержит информацию о деревнях для сбора
-            for (const selector of possibleTables) {
-                const tables = document.querySelectorAll(selector);
-                for (let table of tables) {
+            // Поиск по специфичным селекторам
+            for (const selector of specificSelectors) {
+                mainTable = document.querySelector(selector);
+                if (mainTable) {
+                    addDebugLog(`✅ Найдена таблица через специфичный селектор: ${selector}`, 'success');
+                    break;
+                }
+            }
+            
+            // Если не нашли, ищем по содержимому
+            if (!mainTable) {
+                addDebugLog('Поиск по содержимому таблиц...', 'info');
+                const allTables = document.querySelectorAll('table');
+                
+                for (let table of allTables) {
                     const tableText = table.textContent;
-                    // Проверяем, что это таблица с деревнями для сбора (содержит кнопки отправки, названия деревень и т.д.)
-                    if (tableText.includes('Деревня') || 
-                        tableText.includes('Войска') || 
-                        tableText.includes('Отправить') ||
-                        table.querySelectorAll('button, input[type="submit"]').length > 0) {
+                    const hasVillages = tableText.includes('Деревня') || table.querySelectorAll('a[href*="village"]').length > 0;
+                    const hasSendButtons = table.querySelectorAll('button, input[type="submit"]').length > 0;
+                    const hasMultipleRows = table.querySelectorAll('tr').length > 3;
+                    
+                    addDebugLog(`Таблица: деревни=${hasVillages}, кнопки=${hasSendButtons}, строк=${table.querySelectorAll('tr').length}`, 'info');
+                    
+                    if (hasVillages && hasSendButtons && hasMultipleRows) {
                         mainTable = table;
-                        tableSource = selector;
-                        addDebugLog(`Найдена потенциальная таблица через: ${selector}`, 'info');
+                        addDebugLog('✅ Найдена таблица по содержимому', 'success');
                         break;
                     }
                 }
-                if (mainTable) break;
+            }
+            
+            // Последняя попытка: берем самую большую таблицу с кнопками
+            if (!mainTable) {
+                addDebugLog('Поиск самой большой таблицы с кнопками...', 'info');
+                const allTables = document.querySelectorAll('table');
+                let maxButtons = 0;
+                
+                for (let table of allTables) {
+                    const buttonCount = table.querySelectorAll('button, input[type="submit"]').length;
+                    if (buttonCount > maxButtons) {
+                        maxButtons = buttonCount;
+                        mainTable = table;
+                    }
+                }
+                
+                if (mainTable) {
+                    addDebugLog(`✅ Выбрана таблица с максимальным количеством кнопок: ${maxButtons}`, 'success');
+                }
             }
             
             if (!mainTable) {
-                addDebugLog('❌ Таблица с деревнями не найдена!', 'error');
+                addDebugLog('❌ Не удалось найти таблицу массового сбора!', 'error');
                 
-                // Дополнительная диагностика
+                // Диагностика
                 const allTables = document.querySelectorAll('table');
                 addDebugLog(`Всего таблиц на странице: ${allTables.length}`, 'info');
                 
                 allTables.forEach((table, index) => {
                     const buttons = table.querySelectorAll('button, input[type="submit"]').length;
                     const rows = table.querySelectorAll('tr').length;
+                    const villageLinks = table.querySelectorAll('a[href*="village"]').length;
                     const textSample = table.textContent.substring(0, 100).replace(/\s+/g, ' ');
                     
-                    addDebugLog(`Таблица ${index}: кнопок=${buttons}, строк=${rows}, текст="${textSample}"`, 'info');
-                    
-                    // Если в таблице есть кнопки и несколько строк, возможно это наша таблица
-                    if (buttons > 0 && rows > 1) {
-                        mainTable = table;
-                        addDebugLog(`✅ ВЫБРАНА таблица ${index} по количеству кнопок`, 'success');
-                    }
+                    addDebugLog(`Таблица ${index}: кнопок=${buttons}, строк=${rows}, ссылок на деревни=${villageLinks}`, 'info');
+                    addDebugLog(`  Текст: "${textSample}"`, 'info');
                 });
-            }
-            
-            if (!mainTable) {
-                addDebugLog('❌ Не удалось найти подходящую таблицу!', 'error');
+                
                 return villages;
             }
             
-            addDebugLog(`✅ Используем таблицу: ${tableSource}`, 'success');
-            
-            const rows = mainTable.querySelectorAll('tr');
-            addDebugLog(`Таблица содержит ${rows.length} строк`, 'info');
-            
             // Обрабатываем строки таблицы
-            let processedRows = 0;
+            const rows = mainTable.querySelectorAll('tr');
+            addDebugLog(`Обработка таблицы: ${rows.length} строк`, 'info');
+            
+            let processedVillages = 0;
             rows.forEach((row, rowIndex) => {
                 try {
-                    const cells = row.querySelectorAll('td');
-                    if (cells.length < 3) {
-                        return; // Пропускаем строки с недостаточным количеством ячеек
+                    // Пропускаем заголовки и пустые строки
+                    if (rowIndex === 0 || row.querySelectorAll('td').length < 3) {
+                        return;
                     }
                     
                     // Ищем ссылку на деревню
                     const villageLink = row.querySelector('a[href*="village"]');
                     if (!villageLink) {
-                        return; // Пропускаем строки без ссылки на деревню
+                        addDebugLog(`Строка ${rowIndex}: нет ссылки на деревню`, 'warning');
+                        return;
+                    }
+                    
+                    // Ищем кнопки отправки
+                    const sendButtons = row.querySelectorAll('button, input[type="submit"]');
+                    if (sendButtons.length === 0) {
+                        addDebugLog(`Строка ${rowIndex}: нет кнопок отправки`, 'warning');
+                        return;
                     }
                     
                     const villageHref = villageLink.getAttribute('href');
                     const villageIdMatch = villageHref.match(/village=(\d+)/);
                     if (!villageIdMatch) {
+                        addDebugLog(`Строка ${rowIndex}: не удалось извлечь ID деревни`, 'warning');
                         return;
                     }
                     
                     const villageId = villageIdMatch[1];
                     const villageName = villageLink.textContent.trim();
                     
-                    // Проверяем, есть ли кнопки отправки в этой строке
-                    const sendButtons = row.querySelectorAll('button, input[type="submit"]');
-                    if (sendButtons.length === 0) {
-                        addDebugLog(`Строка ${rowIndex}: нет кнопок отправки, пропускаем`, 'warning');
-                        return;
-                    }
-                    
-                    addDebugLog(`✅ Найдена деревня: ${villageName} (ID:${villageId})`, 'success');
+                    addDebugLog(`✅ Обработка деревни: ${villageName} (ID:${villageId})`, 'success');
                     
                     // Получаем информацию о войсках
                     const localUnits = getLocalUnitsFromRow(row);
@@ -629,15 +654,15 @@
                         row: row
                     });
                     
-                    processedRows++;
-                    addDebugLog(`Добавлена деревня: ${villageName}, войск: ${totalLocalTroops}`, 'success');
+                    processedVillages++;
+                    addDebugLog(`✅ Добавлена деревня: ${villageName}, войск: ${totalLocalTroops}`, 'success');
                     
                 } catch (e) {
                     addDebugLog(`Ошибка обработки строки ${rowIndex}: ${e.message}`, 'error');
                 }
             });
             
-            addDebugLog(`Всего обработано деревень: ${processedRows}`, 'success');
+            addDebugLog(`Всего обработано деревень: ${processedVillages}`, 'success');
             return villages;
         } catch (e) {
             addDebugLog(`Критическая ошибка получения данных: ${e.message}`, 'error');
@@ -698,14 +723,14 @@
                 // Если не удалось определить количество, используем разумные значения по умолчанию
                 addDebugLog('Информация о войсках не найдена, используем значения по умолчанию', 'warning');
                 worldUnits.forEach(unit => {
-                    units[unit.id] = troopTypesEnabled[unit.id] ? 50 : 0;
+                    units[unit.id] = troopTypesEnabled[unit.id] ? 100 : 0;
                 });
             }
             
         } catch (e) {
             addDebugLog(`Ошибка парсинга войск: ${e.message}`, 'error');
             worldUnits.forEach(unit => {
-                units[unit.id] = troopTypesEnabled[unit.id] ? 50 : 0;
+                units[unit.id] = troopTypesEnabled[unit.id] ? 100 : 0;
             });
         }
         
@@ -1281,7 +1306,7 @@
         panel.className = 'g4lkir95-panel';
         panel.innerHTML = `
             <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
-            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.1</div>
+            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.2</div>
             ${createSettingsInterface()}
 
             <div class="g4lkir95-section">
@@ -1376,15 +1401,15 @@
 
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
-        console.log('G4lKir95: Initializing v4.1 with improved table detection...');
+        console.log('G4lKir95: Initializing v4.2 with improved table detection...');
         const styleSheet = document.createElement('style');
         styleSheet.textContent = styles;
         document.head.appendChild(styleSheet);
         loadSophieSettings();
         addLaunchButton();
         setTimeout(createInterface, 500);
-        addDebugLog('G4lKir95 Mass Scavenging v4.1 активирован! Улучшенный поиск таблицы.', 'success');
-        showNotification('G4lKir95 Mass Scavenging v4.1 активирован!', 'success');
+        addDebugLog('G4lKir95 Mass Scavenging v4.2 активирован! Улучшенный поиск таблицы.', 'success');
+        showNotification('G4lKir95 Mass Scavenging v4.2 активирован!', 'success');
     }
 
     if (document.readyState === 'loading') {
