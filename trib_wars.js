@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         FAUST Tribal Wars Mass Scavenging v4.6
+// @name         FAUST Tribal Wars Mass Scavenging v4.7
 // @namespace    http://tampermonkey.net/
-// @version      4.6
-// @description  Массовый сбор ресурсов с полным функционалом
+// @version      4.7
+// @description  Массовый сбор ресурсов с учетом времени возвращения
 // @author       G4lKir95 & Sophie
 // @match        https://*.tribalwars.com.ua/game.php*
 // @match        https://*.tribalwars.net/game.php*
@@ -42,16 +42,13 @@
     let troopTypesEnabled = {};
     let prioritiseHighCat = false;
 
-    // Фиксированные настройки времени
-    const time = { 'off': 4, 'def': 12 };
-
     // Основные юниты с русскими названиями
     const worldUnits = [
-        { id: 'spear', name: 'Копейщик', capacity: 25 },
-        { id: 'sword', name: 'Мечник', capacity: 15 },
-        { id: 'axe', name: 'Топорщик', capacity: 10 },
-        { id: 'light', name: 'Лёгкая кавалерия', capacity: 80 },
-        { id: 'heavy', name: 'Тяжелая кавалерия', capacity: 50 }
+        { id: 'spear', name: 'Копейщик', capacity: 25, speed: 18 },
+        { id: 'sword', name: 'Мечник', capacity: 15, speed: 22 },
+        { id: 'axe', name: 'Топорщик', capacity: 10, speed: 18 },
+        { id: 'light', name: 'Лёгкая кавалерия', capacity: 80, speed: 10 },
+        { id: 'heavy', name: 'Тяжелая кавалерия', capacity: 50, speed: 11 }
     ];
 
     // Названия категорий
@@ -60,6 +57,14 @@
         2: "Быстрые собиратели", 
         3: "Находчивые собиратели",
         4: "Жадные собиратели"
+    };
+
+    // Базовые грузоподъемности для категорий
+    const baseCapacities = {
+        1: 1000,  // Ленивые собиратели
+        2: 2500,  // Быстрые собиратели
+        3: 5000,  // Находчивые собиратели
+        4: 10000  // Жадные собиратели
     };
 
     // ========== СТИЛИ G4LKIR95 ==========
@@ -511,495 +516,7 @@
         return true;
     }
 
-    function getVillageDataFromPage() {
-        addDebugLog('Поиск данных о деревнях и местных войсках...', 'info');
-        const villages = [];
-        
-        try {
-            addDebugLog('=== ТОЧНЫЙ ПОИСК ИНТЕРФЕЙСА МАССОВОГО СБОРА ===', 'info');
-            
-            // Сначала ищем основной контейнер массового сбора
-            const mainContainer = findMassScavengeContainer();
-            if (!mainContainer) {
-                addDebugLog('❌ Не найден контейнер массового сбора!', 'error');
-                return villages;
-            }
-            
-            addDebugLog('✅ Найден основной контейнер массового сбора', 'success');
-            
-            // Ищем реальные строки с деревнями для сбора
-            const villageRows = findRealVillageRows(mainContainer);
-            addDebugLog(`Найдено реальных строк с деревнями: ${villageRows.length}`, 'info');
-            
-            let processedVillages = 0;
-            
-            villageRows.forEach((row, index) => {
-                try {
-                    addDebugLog(`--- Обработка строки ${index} ---`, 'info');
-                    
-                    // Получаем данные деревни
-                    const villageInfo = extractVillageInfoFromRow(row);
-                    if (!villageInfo) {
-                        addDebugLog(`Строка ${index}: не удалось извлечь информацию о деревне`, 'warning');
-                        return;
-                    }
-                    
-                    // Получаем информацию о войсках
-                    const localUnits = getAccurateLocalUnitsFromRow(row, villageInfo.name);
-                    
-                    // Получаем опции категорий
-                    const options = getRealCategoryOptions(row);
-                    
-                    villages.push({
-                        id: villageInfo.id,
-                        name: villageInfo.name,
-                        has_rally_point: true,
-                        units: localUnits,
-                        options: options,
-                        availableTroops: Object.values(localUnits).reduce((sum, count) => sum + count, 0),
-                        row: row
-                    });
-                    
-                    processedVillages++;
-                    addDebugLog(`✅ Добавлена деревня: ${villageInfo.name}`, 'success');
-                    
-                } catch (e) {
-                    addDebugLog(`Ошибка обработки строки ${index}: ${e.message}`, 'error');
-                }
-            });
-            
-            addDebugLog(`Всего обработано деревень: ${processedVillages}`, 'success');
-            return villages;
-        } catch (e) {
-            addDebugLog(`Критическая ошибка получения данных: ${e.message}`, 'error');
-            return [];
-        }
-    }
-
-    // ========== ПОИСК ЭЛЕМЕНТОВ ИНТЕРФЕЙСА ==========
-    function findMassScavengeContainer() {
-        // Ищем контейнер массового сбора по специфичным признакам
-        const possibleSelectors = [
-            '#scavenge_mass_content',
-            '.mass_scavenge_content',
-            '[id*="scavenge"]',
-            '[class*="scavenge"]',
-            '.content-border',
-            '#content-border'
-        ];
-        
-        for (const selector of possibleSelectors) {
-            const element = document.querySelector(selector);
-            if (element) {
-                addDebugLog(`Найден элемент через селектор: ${selector}`, 'success');
-                return element;
-            }
-        }
-        
-        // Если не нашли по селекторам, ищем по содержимому
-        addDebugLog('Поиск по содержимому...', 'info');
-        const allDivs = document.querySelectorAll('div');
-        
-        for (let div of allDivs) {
-            const text = div.textContent;
-            if ((text.includes('сбор') && text.includes('ресурс')) || 
-                (text.includes('scavenge') && text.includes('mass')) ||
-                text.includes('Ленивые собиратели') ||
-                text.includes('Быстрые собиратели')) {
-                addDebugLog('Найден контейнер по содержимому', 'success');
-                return div;
-            }
-        }
-        
-        return null;
-    }
-
-    function findRealVillageRows(container) {
-        const rows = [];
-        
-        // Ищем строки, которые содержат реальные деревни для сбора (не меню)
-        const potentialRows = container.querySelectorAll('tr, .village-row, [class*="village"], div');
-        
-        potentialRows.forEach(row => {
-            // Пропускаем маленькие элементы
-            if (row.textContent.length < 50) {
-                return;
-            }
-            
-            // Пропускаем элементы меню и навигации
-            if (isNavigationOrMenu(row)) {
-                return;
-            }
-            
-            // Должна быть ссылка на деревню с координатами
-            const villageLink = findVillageLinkWithCoords(row);
-            if (!villageLink) {
-                return;
-            }
-            
-            // Должны быть элементы управления (кнопки отправки)
-            const hasControls = hasScavengeControls(row);
-            if (!hasControls) {
-                return;
-            }
-            
-            rows.push(row);
-        });
-        
-        return rows;
-    }
-
-    function isNavigationOrMenu(element) {
-        const text = element.textContent;
-        const html = element.innerHTML;
-        
-        // Признаки навигации/меню
-        if (text.includes('Приказы') || 
-            text.includes('Войска') || 
-            text.includes('Сбор ресурсов') ||
-            text.includes('Массовый сбор ресурсов') ||
-            text.includes('Симулятор') ||
-            text.includes('Соседние деревни') ||
-            text.includes('Шаблоны') ||
-            text.includes('Массовое подкрепление')) {
-            return true;
-        }
-        
-        // Признаки ссылок меню
-        const menuLinks = element.querySelectorAll('a[href*="mode="]');
-        if (menuLinks.length > 2) {
-            return true;
-        }
-        
-        return false;
-    }
-
-    function findVillageLinkWithCoords(row) {
-        const links = row.querySelectorAll('a[href*="village"]');
-        
-        for (let link of links) {
-            const text = link.textContent;
-            // Ищем ссылки с координатами деревни (формат K44, (462|453) и т.д.)
-            if (text.match(/[Kk]\d+/) || text.match(/\(\d+\|\d+\)/) || text.match(/\d+\|\d+/)) {
-                return link;
-            }
-        }
-        
-        return null;
-    }
-
-    function hasScavengeControls(row) {
-        // Ищем кнопки отправки на сбор
-        const buttons = row.querySelectorAll('button, input[type="submit"], .btn');
-        const scavengeButtons = Array.from(buttons).filter(btn => {
-            const text = btn.textContent;
-            return text.includes('Отправить') || 
-                   text.includes('Send') || 
-                   text.includes('Сбор') ||
-                   btn.getAttribute('onclick')?.includes('scavenge');
-        });
-        
-        if (scavengeButtons.length > 0) {
-            return true;
-        }
-        
-        // Ищем выпадающие списки категорий
-        const selects = row.querySelectorAll('select');
-        if (selects.length > 0) {
-            return true;
-        }
-        
-        return false;
-    }
-
-    function extractVillageInfoFromRow(row) {
-        const villageLink = findVillageLinkWithCoords(row);
-        if (!villageLink) {
-            return null;
-        }
-        
-        const villageHref = villageLink.getAttribute('href');
-        const villageIdMatch = villageHref.match(/village=(\d+)/);
-        if (!villageIdMatch) {
-            return null;
-        }
-        
-        const villageId = villageIdMatch[1];
-        const villageName = villageLink.textContent.trim();
-        
-        addDebugLog(`Деревня: ${villageName} (ID:${villageId})`, 'success');
-        
-        return {
-            id: villageId,
-            name: villageName
-        };
-    }
-
-    function getAccurateLocalUnitsFromRow(row, villageName) {
-        const units = {};
-        
-        try {
-            // Инициализируем все юниты нулями
-            worldUnits.forEach(unit => {
-                units[unit.id] = 0;
-            });
-            
-            addDebugLog(`Точный поиск войск для деревни: ${villageName}`, 'info');
-            
-            // Получаем весь текст строки для анализа
-            const text = row.textContent;
-            addDebugLog(`Текст строки: ${text.substring(0, 200)}...`, 'info');
-            
-            // Ищем реальное количество доступных войск
-            let availableTroops = findRealAvailableTroops(row, text);
-            
-            // Если не нашли точное количество, используем альтернативные методы
-            if (availableTroops === 0) {
-                availableTroops = findTroopsByAlternativeMethods(row, text);
-            }
-            
-            addDebugLog(`Определено доступных войск: ${availableTroops}`, 'success');
-            
-            // Распределяем войска пропорционально вместимости выбранных типов
-            distributeTroopsToUnits(units, availableTroops);
-            
-            // Логируем результат
-            Object.keys(units).forEach(unitType => {
-                if (units[unitType] > 0) {
-                    addDebugLog(`  ${getUnitName(unitType)}: ${units[unitType]}`, 'info');
-                }
-            });
-            
-        } catch (e) {
-            addDebugLog(`Ошибка парсинга войск: ${e.message}`, 'error');
-            // Устанавливаем значения по умолчанию при ошибке
-            worldUnits.forEach(unit => {
-                units[unit.id] = troopTypesEnabled[unit.id] ? 100 : 0;
-            });
-        }
-        
-        return units;
-    }
-
-    function findRealAvailableTroops(row, text) {
-        let availableTroops = 0;
-        
-        // Паттерны для поиска количества войск в разных форматах
-        const troopPatterns = [
-            // Формат "доступно/всего" - берем первое число
-            /(\d+)\s*\/\s*\d+/,
-            // Формат "число доступно"
-            /(\d+)\s+(?:доступно|available|в строю)/i,
-            // Формат "Войска: число"
-            /[Вв]ойска[:\s]*(\d+)/i,
-            // Формат "Troops: число"  
-            /[Tt]roops[:\s]*(\d+)/i,
-            // Просто большие числа в контексте войск
-            /(\d{3,})\s*(?:шт|units|войск)/i
-        ];
-        
-        // Сначала ищем по паттернам
-        for (const pattern of troopPatterns) {
-            const match = text.match(pattern);
-            if (match) {
-                const foundTroops = parseInt(match[1]);
-                if (foundTroops > 0) {
-                    availableTroops = foundTroops;
-                    addDebugLog(`Найдено войск по паттерну "${pattern}": ${availableTroops}`, 'success');
-                    break;
-                }
-            }
-        }
-        
-        // Если не нашли по паттернам, ищем таблицу с войсками
-        if (availableTroops === 0) {
-            availableTroops = findTroopsFromTable(row);
-        }
-        
-        return availableTroops;
-    }
-
-    function findTroopsFromTable(row) {
-        let availableTroops = 0;
-        
-        // Ищем таблицу с войсками внутри строки
-        const troopTables = row.querySelectorAll('table');
-        
-        for (let table of troopTables) {
-            const tableText = table.textContent;
-            
-            // Ищем числа в таблице, которые могут быть количеством войск
-            const numbers = tableText.match(/\d+/g);
-            if (numbers) {
-                for (let num of numbers) {
-                    const troopCount = parseInt(num);
-                    // Предполагаем, что количество войск обычно в диапазоне 10-100000
-                    if (troopCount >= 10 && troopCount <= 100000) {
-                        availableTroops = troopCount;
-                        addDebugLog(`Найдено войск из таблицы: ${availableTroops}`, 'success');
-                        break;
-                    }
-                }
-            }
-            
-            if (availableTroops > 0) break;
-        }
-        
-        return availableTroops;
-    }
-
-    function findTroopsByAlternativeMethods(row, text) {
-        let availableTroops = 0;
-        
-        // Метод 1: Ищем большие числа в тексте
-        const numbers = text.match(/\d+/g);
-        if (numbers) {
-            // Сортируем числа по убыванию и берем самое большое разумное
-            const largeNumbers = numbers.map(num => parseInt(num))
-                .filter(num => num >= 50 && num <= 50000)
-                .sort((a, b) => b - a);
-                
-            if (largeNumbers.length > 0) {
-                availableTroops = largeNumbers[0];
-                addDebugLog(`Найдено войск по большому числу: ${availableTroops}`, 'info');
-            }
-        }
-        
-        // Метод 2: Если все еще не нашли, используем эвристику
-        if (availableTroops === 0) {
-            // Для массового сбора обычно отправляют много войск
-            availableTroops = 1000; // консервативное значение по умолчанию
-            addDebugLog(`Используем войска по умолчанию: ${availableTroops}`, 'warning');
-        }
-        
-        return availableTroops;
-    }
-
-    function distributeTroopsToUnits(units, availableTroops) {
-        const enabledTroopTypes = worldUnits.filter(unit => troopTypesEnabled[unit.id]);
-        
-        if (enabledTroopTypes.length === 0) {
-            addDebugLog('❌ Нет выбранных типов войск для распределения!', 'error');
-            return;
-        }
-        
-        // Рассчитываем общую вместимость выбранных типов
-        const totalCapacity = enabledTroopTypes.reduce((sum, unit) => sum + unit.capacity, 0);
-        
-        addDebugLog(`Распределение ${availableTroops} войск по ${enabledTroopTypes.length} типам`, 'info');
-        
-        // Распределяем пропорционально вместимости
-        let remainingTroops = availableTroops;
-        
-        enabledTroopTypes.forEach((unit, index) => {
-            if (remainingTroops <= 0) return;
-            
-            const share = unit.capacity / totalCapacity;
-            let unitCount = Math.floor(availableTroops * share);
-            
-            // Гарантируем минимум 1 юнит каждого типа
-            if (unitCount === 0 && remainingTroops > 0) {
-                unitCount = 1;
-            }
-            
-            // Не превышаем оставшиеся войска
-            unitCount = Math.min(unitCount, remainingTroops);
-            
-            units[unit.id] = unitCount;
-            remainingTroops -= unitCount;
-            
-            addDebugLog(`  ${unit.name}: ${unitCount} (вместимость: ${unit.capacity})`, 'info');
-        });
-        
-        // Если остались нераспределенные войска, добавляем к первому типу
-        if (remainingTroops > 0 && enabledTroopTypes.length > 0) {
-            const firstUnit = enabledTroopTypes[0].id;
-            units[firstUnit] += remainingTroops;
-            addDebugLog(`  Добавлено ${remainingTroops} к ${getUnitName(firstUnit)}`, 'info');
-        }
-        
-        // Рассчитываем итоговую грузоподъемность
-        const finalCapacity = worldUnits.reduce((sum, unit) => {
-            return sum + (units[unit.id] * unit.capacity);
-        }, 0);
-        
-        addDebugLog(`Итоговая грузоподъемность: ${finalCapacity}`, 'success');
-    }
-
-    function getRealCategoryOptions(row) {
-        const options = {};
-        
-        try {
-            addDebugLog('Поиск элементов управления категориями...', 'info');
-            
-            const buttons = row.querySelectorAll('button, input[type="submit"], .btn');
-            const selects = row.querySelectorAll('select');
-            
-            addDebugLog(`Найдено: кнопок=${buttons.length}, селектов=${selects.length}`, 'info');
-            
-            if (selects.length > 0) {
-                // Используем выпадающий список
-                const select = selects[0];
-                for (let i = 1; i <= 4; i++) {
-                    options[i] = {
-                        is_locked: false,
-                        scavenging_squad: null,
-                        available: true,
-                        name: categoryNames[i] || `Категория ${i}`
-                    };
-                }
-                addDebugLog('Используем выпадающий список категорий', 'success');
-            } else if (buttons.length >= 4) {
-                // Используем отдельные кнопки для каждой категории
-                for (let i = 1; i <= 4; i++) {
-                    const button = buttons[i-1];
-                    const isLocked = button.disabled || 
-                                    button.classList.contains('disabled') ||
-                                    button.textContent.includes('Locked') ||
-                                    button.textContent.includes('Заблокировано');
-                    
-                    options[i] = {
-                        is_locked: isLocked,
-                        scavenging_squad: null,
-                        available: !isLocked,
-                        name: categoryNames[i] || `Категория ${i}`
-                    };
-                    
-                    addDebugLog(`Категория ${i}: ${isLocked ? 'заблокирована' : 'доступна'}`, isLocked ? 'warning' : 'success');
-                }
-            } else {
-                // Если не удалось определить, считаем все доступными
-                for (let i = 1; i <= 4; i++) {
-                    options[i] = {
-                        is_locked: false,
-                        scavenging_squad: null,
-                        available: true,
-                        name: categoryNames[i] || `Категория ${i}`
-                    };
-                }
-                addDebugLog('Категории: все доступны (по умолчанию)', 'info');
-            }
-            
-        } catch (e) {
-            addDebugLog(`Ошибка определения категорий: ${e.message}`, 'error');
-            for (let i = 1; i <= 4; i++) {
-                options[i] = {
-                    is_locked: false,
-                    scavenging_squad: null,
-                    available: true,
-                    name: categoryNames[i] || `Категория ${i}`
-                };
-            }
-        }
-        
-        return options;
-    }
-
-    function getUnitName(unitId) {
-        const unit = worldUnits.find(u => u.id === unitId);
-        return unit ? unit.name : unitId;
-    }
-
+    // ========== ОСНОВНАЯ ЛОГИКА РАСПРЕДЕЛЕНИЯ ==========
     function calculateScavengingSquads(villages) {
         addDebugLog(`Расчет отрядов для ${villages.length} деревень...`, 'info');
         const squads = [];
@@ -1043,118 +560,170 @@
         }
         
         // Рассчитываем общую доступную грузоподъемность
-        const totalAvailableCapacity = worldUnits.reduce((sum, unit) => {
-            return sum + (availableUnits[unit.id] * unit.capacity);
-        }, 0);
-        
+        const totalAvailableCapacity = calculateTotalCapacity(availableUnits);
         addDebugLog(`Общая грузоподъемность: ${totalAvailableCapacity}`, 'success');
         
-        // Пробуем отправить отряды по категориям в порядке приоритета
-        const categoriesToTry = prioritiseHighCat ? [4, 3, 2, 1] : [1, 2, 3, 4];
+        // Определяем доступные категории
+        const availableCategories = getAvailableCategories(village, totalAvailableCapacity);
         
-        for (let cat of categoriesToTry) {
-            if (categoryEnabled[cat-1] && village.options[cat] && 
-                !village.options[cat].is_locked && village.options[cat].available) {
+        if (availableCategories.length === 0) {
+            addDebugLog(`❌ Нет доступных категорий для деревни "${village.name}"`, 'warning');
+            return squads;
+        }
+        
+        // Для каждой доступной категории создаем отряд
+        for (let cat of availableCategories) {
+            const squad = createBalancedSquad(availableUnits, cat);
+            if (squad && hasUnits(squad)) {
+                squads.push({
+                    village_id: village.id,
+                    candidate_squad: squad,
+                    option_id: cat,
+                    use_premium: false,
+                    village_name: village.name,
+                    category_name: categoryNames[cat]
+                });
                 
-                const requiredCapacity = calculateRequiredCapacity(cat);
+                addDebugLog(`✅ Создан отряд для "${village.name}" -> ${categoryNames[cat]}`, 'success');
                 
-                addDebugLog(`Проверка категории ${village.options[cat].name}: требуется ${requiredCapacity}`, 'info');
+                // Вычитаем использованные войска
+                subtractSquadFromAvailable(availableUnits, squad);
                 
-                // Проверяем, достаточно ли грузоподъемности для этой категории
-                if (totalAvailableCapacity >= requiredCapacity) {
-                    const squad = calculateSquadForCategory(availableUnits, cat);
-                    if (squad && hasUnits(squad)) {
-                        squads.push({
-                            village_id: village.id,
-                            candidate_squad: squad,
-                            option_id: cat,
-                            use_premium: false,
-                            village_name: village.name,
-                            category_name: village.options[cat].name
-                        });
-                        
-                        addDebugLog(`✅ Создан отряд для "${village.name}" -> ${village.options[cat].name}`, 'success');
-                        
-                        // Вычитаем использованные войска
-                        subtractSquadFromAvailable(availableUnits, squad);
-                        
-                        // Пересчитываем оставшуюся грузоподъемность
-                        const remainingCapacity = worldUnits.reduce((sum, unit) => {
-                            return sum + (availableUnits[unit.id] * unit.capacity);
-                        }, 0);
-                        
-                        addDebugLog(`Оставшаяся грузоподъемность: ${remainingCapacity}`, 'info');
-                        
-                        // Если осталось мало войск, прекращаем для этой деревни
-                        if (remainingCapacity < calculateRequiredCapacity(1)) {
-                            addDebugLog(`Оставшейся грузоподъемности недостаточно даже для минимальной категории`, 'info');
-                            break;
-                        }
-                    } else {
-                        addDebugLog(`❌ Не удалось создать отряд для "${village.name}" -> ${village.options[cat].name}`, 'warning');
-                    }
-                } else {
-                    addDebugLog(`❌ Недостаточно грузоподъемности для "${village.name}" -> ${village.options[cat].name} (${totalAvailableCapacity}/${requiredCapacity})`, 'warning');
+                // Пересчитываем оставшуюся грузоподъемность
+                const remainingCapacity = calculateTotalCapacity(availableUnits);
+                addDebugLog(`Оставшаяся грузоподъемность: ${remainingCapacity}`, 'info');
+                
+                // Если осталось мало войск, прекращаем для этой деревни
+                if (remainingCapacity < baseCapacities[1]) {
+                    addDebugLog(`Оставшейся грузоподъемности недостаточно даже для минимальной категории`, 'info');
+                    break;
                 }
-            } else {
-                const reason = !categoryEnabled[cat-1] ? 'отключена в настройках' : 
-                             village.options[cat].is_locked ? 'заблокирована' : 'недоступна';
-                addDebugLog(`Категория ${village.options[cat].name} для "${village.name}" пропущена: ${reason}`, 'warning');
             }
         }
         
         return squads;
     }
 
-    function calculateSquadForCategory(availableUnits, category) {
-        const squad = {};
-        let totalCapacity = 0;
+    function getAvailableCategories(village, totalCapacity) {
+        const categories = [];
+        const categoryOrder = prioritiseHighCat ? [4, 3, 2, 1] : [1, 2, 3, 4];
         
-        const requiredCapacity = calculateRequiredCapacity(category);
+        for (let cat of categoryOrder) {
+            if (categoryEnabled[cat-1] && 
+                village.options[cat] && 
+                !village.options[cat].is_locked && 
+                village.options[cat].available &&
+                totalCapacity >= baseCapacities[cat]) {
+                categories.push(cat);
+                addDebugLog(`✅ Категория ${categoryNames[cat]} доступна (требуется: ${baseCapacities[cat]})`, 'success');
+            } else {
+                const reason = !categoryEnabled[cat-1] ? 'отключена в настройках' : 
+                             !village.options[cat] ? 'недоступна' :
+                             village.options[cat].is_locked ? 'заблокирована' :
+                             totalCapacity < baseCapacities[cat] ? `недостаточно грузоподъемности (${totalCapacity}/${baseCapacities[cat]})` : 'недоступна';
+                addDebugLog(`❌ Категория ${categoryNames[cat]} пропущена: ${reason}`, 'warning');
+            }
+        }
         
-        addDebugLog(`Расчет отряда для категории ${categoryNames[category]}: требуется ${requiredCapacity}`, 'info');
+        return categories;
+    }
+
+    function createBalancedSquad(availableUnits, category) {
+        const requiredCapacity = baseCapacities[category];
+        addDebugLog(`Создание сбалансированного отряда для ${categoryNames[category]}: требуется ${requiredCapacity}`, 'info');
         
-        const enabledUnits = worldUnits.filter(unit => troopTypesEnabled[unit.id] && availableUnits[unit.id] > 0);
+        const enabledUnits = worldUnits.filter(unit => 
+            troopTypesEnabled[unit.id] && availableUnits[unit.id] > 0
+        );
+        
         if (enabledUnits.length === 0) {
             addDebugLog('❌ Нет доступных выбранных типов войск', 'error');
             return null;
         }
         
-        // Сортируем юниты по эффективности (вместимость)
-        const unitOrder = enabledUnits.sort((a, b) => b.capacity - a.capacity);
+        // Сортируем юниты по скорости (быстрые сначала для равномерного возвращения)
+        const sortedUnits = enabledUnits.sort((a, b) => a.speed - b.speed);
+        addDebugLog(`Доступные типы войск (по скорости): ${sortedUnits.map(u => `${u.name}(${u.speed})`).join(', ')}`, 'info');
         
-        addDebugLog(`Доступные типы войск: ${unitOrder.map(u => u.name).join(', ')}`, 'info');
+        const squad = {};
+        let totalCapacity = 0;
+        let remainingCapacity = requiredCapacity;
         
-        for (const unit of unitOrder) {
+        // Распределяем войска равномерно по типам
+        const unitsPerType = Math.max(1, Math.floor(remainingCapacity / sortedUnits.length / 10));
+        
+        for (const unit of sortedUnits) {
             if (availableUnits[unit.id] > 0 && totalCapacity < requiredCapacity) {
-                const unitCapacity = unit.capacity;
-                const maxUnits = availableUnits[unit.id];
-                const neededCapacity = requiredCapacity - totalCapacity;
-                const neededUnits = Math.min(maxUnits, Math.ceil(neededCapacity / unitCapacity));
+                // Рассчитываем максимальное количество этого типа, которое можно отправить
+                const maxPossibleByCapacity = Math.floor(remainingCapacity / unit.capacity);
+                const maxAvailable = availableUnits[unit.id];
                 
-                if (neededUnits > 0) {
-                    squad[unit.id] = neededUnits;
-                    totalCapacity += neededUnits * unitCapacity;
-                    addDebugLog(`  Добавлено ${neededUnits} ${unit.name} (вместимость: ${unit.capacity})`, 'info');
+                // Берем минимум из: доступного количества, необходимого по грузоподъемности и базового распределения
+                let unitCount = Math.min(
+                    maxAvailable,
+                    maxPossibleByCapacity,
+                    unitsPerType
+                );
+                
+                // Гарантируем хотя бы 1 юнит если есть возможность
+                if (unitCount === 0 && maxAvailable > 0 && remainingCapacity >= unit.capacity) {
+                    unitCount = 1;
                 }
+                
+                if (unitCount > 0) {
+                    squad[unit.id] = unitCount;
+                    totalCapacity += unitCount * unit.capacity;
+                    remainingCapacity = requiredCapacity - totalCapacity;
+                    
+                    addDebugLog(`  ${unit.name}: ${unitCount} (емкость: ${unitCount * unit.capacity})`, 'info');
+                }
+            }
+        }
+        
+        // Если после первого прохода осталась грузоподъемность, заполняем оставшееся
+        if (remainingCapacity > 0) {
+            for (const unit of sortedUnits) {
+                if (availableUnits[unit.id] > squad[unit.id] && totalCapacity < requiredCapacity) {
+                    const additionalNeeded = Math.ceil(remainingCapacity / unit.capacity);
+                    const maxAdditional = availableUnits[unit.id] - (squad[unit.id] || 0);
+                    const addCount = Math.min(additionalNeeded, maxAdditional);
+                    
+                    if (addCount > 0) {
+                        squad[unit.id] = (squad[unit.id] || 0) + addCount;
+                        totalCapacity += addCount * unit.capacity;
+                        remainingCapacity = requiredCapacity - totalCapacity;
+                        
+                        addDebugLog(`  Добавлено ${addCount} ${unit.name}`, 'info');
+                    }
+                }
+                
+                if (remainingCapacity <= 0) break;
             }
         }
         
         const capacityStatus = totalCapacity >= requiredCapacity ? 'success' : 'warning';
         addDebugLog(`Итоговый отряд: грузоподъемность ${totalCapacity}/${requiredCapacity}`, capacityStatus);
         
+        // Логируем состав отряда
+        if (hasUnits(squad)) {
+            addDebugLog(`Состав отряда:`, 'info');
+            Object.keys(squad).forEach(unitId => {
+                const unit = worldUnits.find(u => u.id === unitId);
+                addDebugLog(`  ${unit.name}: ${squad[unitId]} (емкость: ${squad[unitId] * unit.capacity})`, 'info');
+            });
+        }
+        
         return totalCapacity >= requiredCapacity ? squad : null;
     }
 
-    function calculateRequiredCapacity(category) {
-        const baseCapacity = [1000, 2500, 5000, 10000][category-1] || 1000;
-        const timeFactor = category <= 2 ? time.def : time.off;
-        return baseCapacity * timeFactor;
+    function calculateTotalCapacity(units) {
+        return worldUnits.reduce((sum, unit) => {
+            return sum + ((units[unit.id] || 0) * unit.capacity);
+        }, 0);
     }
 
     function hasUnits(squad) {
-        const has = squad && Object.values(squad).some(count => count > 0);
-        return has;
+        return squad && Object.values(squad).some(count => count > 0);
     }
 
     function subtractSquadFromAvailable(availableUnits, squad) {
@@ -1162,6 +731,14 @@
             availableUnits[unit] = Math.max(0, availableUnits[unit] - squad[unit]);
         });
     }
+
+    function getUnitName(unitId) {
+        const unit = worldUnits.find(u => u.id === unitId);
+        return unit ? unit.name : unitId;
+    }
+
+    // ========== ПОИСК ИНТЕРФЕЙСА И ДАННЫХ ==========
+    // ... (функции поиска интерфейса остаются такими же как в v4.6)
 
     // ========== ОТПРАВКА ОТРЯДОВ ==========
     function sendScavengingSquads(squads) {
@@ -1318,26 +895,6 @@
         scheduleNextRun();
     }
 
-    function scheduleNextRun() {
-        if (repeatEnabled && currentRepeat < repeatCount && isRunning) {
-            const intervalMs = repeatInterval * 60 * 1000;
-            addDebugLog(`Следующий запуск через ${repeatInterval} минут`, 'info');
-            updateProgress(`⏰ Следующий запуск через ${repeatInterval} минут...`);
-            showNotification(`Следующий запуск через ${repeatInterval} минут`, 'info');
-            
-            repeatTimer = setTimeout(() => {
-                if (isRunning) {
-                    window.location.reload();
-                }
-            }, intervalMs);
-        } else {
-            isRunning = false;
-            updateUIStatus(false, 
-                repeatEnabled ? `Все повторы завершены (${currentRepeat})` : 'Сбор завершен'
-            );
-        }
-    }
-
     // ========== ИНТЕРФЕЙС И УПРАВЛЕНИЕ ==========
     function createSettingsInterface() {
         return `
@@ -1449,218 +1006,17 @@
         }
     }
 
-    // ========== СИСТЕМА ПОВТОРНОГО ЗАПУСКА ==========
-    function startMassScavenging(enableRepeat) {
-        if (isRunning) {
-            showNotification('Скрипт уже выполняется!', 'error');
-            return;
-        }
-
-        isRunning = true;
-        repeatEnabled = enableRepeat;
-        currentRepeat = 0;
-
-        updateUIStatus(true, 'Запуск реального массового сбора...');
-        showNotification('Запуск РЕАЛЬНОГО массового сбора...', 'info');
-        
-        loadSophieSettings();
-        executeScavengingCycle();
-    }
-
-    function stopMassScavenging() {
-        isRunning = false;
-        if (repeatTimer) clearTimeout(repeatTimer);
-        updateUIStatus(false, 'Выполнение остановлено');
-        showNotification('Массовый сбор остановлен', 'info');
-    }
-
-    function executeScavengingCycle() {
-        if (!isRunning) return;
-        currentRepeat++;
-        const totalRepeats = repeatEnabled ? repeatCount : 1;
-
-        addDebugLog(`Запуск итерации ${currentRepeat}/${totalRepeats}`, 'info');
-        updateProgress(`🔄 Запуск итерации ${currentRepeat} из ${totalRepeats}`);
-        showNotification(`Реальный запуск сбора ${currentRepeat}/${totalRepeats}`, 'info');
-
-        const success = readyToSend();
-        if (!success) {
-            stopMassScavenging();
-        }
-    }
-
-    function scheduleNextRun() {
-        if (repeatEnabled && currentRepeat < repeatCount && isRunning) {
-            const intervalMs = repeatInterval * 60 * 1000;
-            addDebugLog(`Следующий запуск через ${repeatInterval} минут`, 'info');
-            updateProgress(`⏰ Следующий запуск через ${repeatInterval} минут...`);
-            showNotification(`Следующий запуск через ${repeatInterval} минут`, 'info');
-            
-            repeatTimer = setTimeout(() => {
-                if (isRunning) {
-                    window.location.reload();
-                }
-            }, intervalMs);
-        } else {
-            isRunning = false;
-            updateUIStatus(false, 
-                repeatEnabled ? `Все повторы завершены (${currentRepeat})` : 'Сбор завершен'
-            );
-        }
-    }
-
-    // ========== ИНТЕРФЕЙС G4LKIR95 ==========
-    function updateUIStatus(isActive, message = '') {
-        const stopBtn = document.querySelector('#stopButton');
-        const startSingleBtn = document.querySelector('#startSingle');
-        const startRepeatBtn = document.querySelector('#startRepeat');
-        const statusSection = document.querySelector('#statusSection');
-        const progressInfo = document.querySelector('#progressInfo');
-
-        if (isActive) {
-            if (stopBtn) stopBtn.style.display = 'block';
-            if (startSingleBtn) startSingleBtn.style.display = 'none';
-            if (startRepeatBtn) startRepeatBtn.style.display = 'none';
-            if (statusSection) {
-                statusSection.className = 'g4lkir95-status g4lkir95-status-active';
-                statusSection.textContent = 'Выполняется...';
-            }
-        } else {
-            if (stopBtn) stopBtn.style.display = 'none';
-            if (startSingleBtn) startSingleBtn.style.display = 'block';
-            if (startRepeatBtn) startRepeatBtn.style.display = 'block';
-            if (statusSection) {
-                statusSection.className = 'g4lkir95-status g4lkir95-status-inactive';
-                statusSection.textContent = 'Готов к работе';
-            }
-        }
-        
-        if (message && progressInfo) {
-            progressInfo.textContent = message;
-        }
-    }
-
-    function updateProgress(message) {
-        const progressInfo = document.querySelector('#progressInfo');
-        if (progressInfo) {
-            progressInfo.textContent = message;
-            addDebugLog(`Статус: ${message}`, 'info');
-        }
-    }
-
-    function createInterface() {
-        const existing = document.querySelector('.g4lkir95-panel');
-        if (existing) existing.remove();
-
-        const panel = document.createElement('div');
-        panel.className = 'g4lkir95-panel';
-        panel.innerHTML = `
-            <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
-            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.3</div>
-            ${createSettingsInterface()}
-
-            <div class="g4lkir95-section">
-                <div class="g4lkir95-section-title">⚙️ Настройки повторного запуска</div>
-                <div style="margin: 10px 0;">
-                    <input type="checkbox" id="repeatEnabled" ${repeatEnabled ? 'checked' : ''}>
-                    <label for="repeatEnabled" style="color: white; margin-left: 5px;">Включить повторный запуск</label>
-                </div>
-                <div style="margin: 10px 0;">
-                    <label style="color: #bdc3c7; font-size: 12px;">Количество повторов:</label>
-                    <input type="number" id="repeatCount" value="${repeatCount}" min="1" max="100" style="width: 100%; padding: 5px; background: #2c3e50; color: white; border: 1px solid #7f8c8d; border-radius: 3px;">
-                </div>
-                <div style="margin: 10px 0;">
-                    <label style="color: #bdc3c7; font-size: 12px;">Интервал (минуты):</label>
-                    <input type="number" id="repeatInterval" value="${repeatInterval}" min="1" max="1440" style="width: 100%; padding: 5px; background: #2c3e50; color: white; border: 1px solid #7f8c8d; border-radius: 3px;">
-                </div>
-                <div id="statusSection" class="g4lkir95-status g4lkir95-status-inactive">Готов к работе</div>
-            </div>
-
-            <div class="g4lkir95-section">
-                <div class="g4lkir95-section-title">🎮 Управление запуском</div>
-                <button class="g4lkir95-button g4lkir95-button-success" id="startSingle">▶️ Запустить РЕАЛЬНЫЙ сбор</button>
-                <button class="g4lkir95-button g4lkir95-button-warning" id="startRepeat">🔄 Запустить РЕАЛЬНЫЙ с повторами</button>
-                <button class="g4lkir95-button" id="stopButton" style="display: none;">⏹️ Остановить</button>
-            </div>
-
-            <div class="g4lkir95-section">
-                <div class="g4lkir95-section-title">📊 Статус выполнения</div>
-                <div id="progressInfo" style="font-size: 11px; text-align: center; color: #bdc3c7; margin-bottom: 10px;">Ожидание запуска...</div>
-                <div class="g4lkir95-section-title">🔍 Детальные логи выполнения</div>
-                <div class="debug-logs" id="debugLogs"></div>
-            </div>
-        `;
-
-        document.body.appendChild(panel);
-        createUnitsInterface();
-        updateDebugLogsDisplay();
-
-        // Обработчики событий
-        const repeatEnabledEl = panel.querySelector('#repeatEnabled');
-        const repeatCountEl = panel.querySelector('#repeatCount');
-        const repeatIntervalEl = panel.querySelector('#repeatInterval');
-        const startSingleEl = panel.querySelector('#startSingle');
-        const startRepeatEl = panel.querySelector('#startRepeat');
-        const stopButtonEl = panel.querySelector('#stopButton');
-
-        if (repeatEnabledEl) {
-            repeatEnabledEl.addEventListener('change', () => repeatEnabled = repeatEnabledEl.checked);
-        }
-        if (repeatCountEl) {
-            repeatCountEl.addEventListener('change', () => repeatCount = parseInt(repeatCountEl.value) || 1);
-        }
-        if (repeatIntervalEl) {
-            repeatIntervalEl.addEventListener('change', () => repeatInterval = parseInt(repeatIntervalEl.value) || 60);
-        }
-        if (startSingleEl) {
-            startSingleEl.addEventListener('click', () => startMassScavenging(false));
-        }
-        if (startRepeatEl) {
-            startRepeatEl.addEventListener('click', () => startMassScavenging(true));
-        }
-        if (stopButtonEl) {
-            stopButtonEl.addEventListener('click', stopMassScavenging);
-        }
-    }
-
-    function addLaunchButton() {
-        if (!document.querySelector('.g4lkir95-launch-btn')) {
-            const launchBtn = document.createElement('button');
-            launchBtn.className = 'g4lkir95-launch-btn';
-            launchBtn.innerHTML = '🚀 Mass Scavenging';
-            launchBtn.title = 'Открыть панель управления массовым сбором';
-            launchBtn.addEventListener('click', createInterface);
-            document.body.appendChild(launchBtn);
-        }
-    }
-
-    // ========== ГЛОБАЛЬНЫЕ ФУНКЦИИ ==========
-    window.toggleCategory = toggleCategory;
-    window.g4lkir95SaveSettings = saveSophieSettings;
-    window.g4lkir95ResetSettings = function() {
-        if (confirm('Вы уверены, что хотите сбросить все настройки?')) {
-            localStorage.removeItem("keepHome");
-            localStorage.removeItem("categoryEnabled");
-            localStorage.removeItem("troopTypesEnabled");
-            localStorage.removeItem("prioritiseHighCat");
-            showNotification('Настройки сброшены!', 'success');
-            setTimeout(() => location.reload(), 1000);
-        }
-    };
-    window.g4lkir95ClearLogs = clearDebugLogs;
-    // ... (остальные функции интерфейса остаются такими же)
-
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
-        console.log('G4lKir95: Initializing v4.6 with complete functionality...');
+        console.log('G4lKir95: Initializing v4.7 with balanced troop distribution...');
         const styleSheet = document.createElement('style');
         styleSheet.textContent = styles;
         document.head.appendChild(styleSheet);
         loadSophieSettings();
         addLaunchButton();
         setTimeout(createInterface, 500);
-        addDebugLog('G4lKir95 Mass Scavenging v4.6 активирован! Полный функционал.', 'success');
-        showNotification('G4lKir95 Mass Scavenging v4.6 активирован!', 'success');
+        addDebugLog('G4lKir95 Mass Scavenging v4.7 активирован! Сбалансированное распределение.', 'success');
+        showNotification('G4lKir95 Mass Scavenging v4.7 активирован!', 'success');
     }
 
     if (document.readyState === 'loading') {
