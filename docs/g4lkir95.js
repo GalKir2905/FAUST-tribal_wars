@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         FAUST Tribal Wars Mass Scavenging v4.4
+// @name         FAUST Tribal Wars Mass Scavenging v4.6
 // @namespace    http://tampermonkey.net/
-// @version      4.4
-// @description  Массовый сбор ресурсов с точным поиском интерфейса
+// @version      4.6
+// @description  Массовый сбор ресурсов с полным функционалом
 // @author       G4lKir95 & Sophie
 // @match        https://*.tribalwars.com.ua/game.php*
 // @match        https://*.tribalwars.net/game.php*
@@ -458,7 +458,6 @@
     }
 
     // ========== РЕАЛЬНАЯ ЛОГИКА MASS SCAVENGING ==========
-    // ========== РЕАЛЬНАЯ ЛОГИКА MASS SCAVENGING ==========
     function readyToSend() {
         addDebugLog('Запуск реального массового сбора...', 'info');
         saveSettingsFromUI();
@@ -545,7 +544,7 @@
                         return;
                     }
                     
-                    // Получаем информацию о войсках - ИСПРАВЛЕННАЯ ФУНКЦИЯ
+                    // Получаем информацию о войсках
                     const localUnits = getAccurateLocalUnitsFromRow(row, villageInfo.name);
                     
                     // Получаем опции категорий
@@ -577,8 +576,164 @@
         }
     }
 
-    // ... (функции findMassScavengeContainer, findRealVillageRows, isNavigationOrMenu, 
-    // findVillageLinkWithCoords, hasScavengeControls, extractVillageInfoFromRow остаются такими же)
+    // ========== ПОИСК ЭЛЕМЕНТОВ ИНТЕРФЕЙСА ==========
+    function findMassScavengeContainer() {
+        // Ищем контейнер массового сбора по специфичным признакам
+        const possibleSelectors = [
+            '#scavenge_mass_content',
+            '.mass_scavenge_content',
+            '[id*="scavenge"]',
+            '[class*="scavenge"]',
+            '.content-border',
+            '#content-border'
+        ];
+        
+        for (const selector of possibleSelectors) {
+            const element = document.querySelector(selector);
+            if (element) {
+                addDebugLog(`Найден элемент через селектор: ${selector}`, 'success');
+                return element;
+            }
+        }
+        
+        // Если не нашли по селекторам, ищем по содержимому
+        addDebugLog('Поиск по содержимому...', 'info');
+        const allDivs = document.querySelectorAll('div');
+        
+        for (let div of allDivs) {
+            const text = div.textContent;
+            if ((text.includes('сбор') && text.includes('ресурс')) || 
+                (text.includes('scavenge') && text.includes('mass')) ||
+                text.includes('Ленивые собиратели') ||
+                text.includes('Быстрые собиратели')) {
+                addDebugLog('Найден контейнер по содержимому', 'success');
+                return div;
+            }
+        }
+        
+        return null;
+    }
+
+    function findRealVillageRows(container) {
+        const rows = [];
+        
+        // Ищем строки, которые содержат реальные деревни для сбора (не меню)
+        const potentialRows = container.querySelectorAll('tr, .village-row, [class*="village"], div');
+        
+        potentialRows.forEach(row => {
+            // Пропускаем маленькие элементы
+            if (row.textContent.length < 50) {
+                return;
+            }
+            
+            // Пропускаем элементы меню и навигации
+            if (isNavigationOrMenu(row)) {
+                return;
+            }
+            
+            // Должна быть ссылка на деревню с координатами
+            const villageLink = findVillageLinkWithCoords(row);
+            if (!villageLink) {
+                return;
+            }
+            
+            // Должны быть элементы управления (кнопки отправки)
+            const hasControls = hasScavengeControls(row);
+            if (!hasControls) {
+                return;
+            }
+            
+            rows.push(row);
+        });
+        
+        return rows;
+    }
+
+    function isNavigationOrMenu(element) {
+        const text = element.textContent;
+        const html = element.innerHTML;
+        
+        // Признаки навигации/меню
+        if (text.includes('Приказы') || 
+            text.includes('Войска') || 
+            text.includes('Сбор ресурсов') ||
+            text.includes('Массовый сбор ресурсов') ||
+            text.includes('Симулятор') ||
+            text.includes('Соседние деревни') ||
+            text.includes('Шаблоны') ||
+            text.includes('Массовое подкрепление')) {
+            return true;
+        }
+        
+        // Признаки ссылок меню
+        const menuLinks = element.querySelectorAll('a[href*="mode="]');
+        if (menuLinks.length > 2) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    function findVillageLinkWithCoords(row) {
+        const links = row.querySelectorAll('a[href*="village"]');
+        
+        for (let link of links) {
+            const text = link.textContent;
+            // Ищем ссылки с координатами деревни (формат K44, (462|453) и т.д.)
+            if (text.match(/[Kk]\d+/) || text.match(/\(\d+\|\d+\)/) || text.match(/\d+\|\d+/)) {
+                return link;
+            }
+        }
+        
+        return null;
+    }
+
+    function hasScavengeControls(row) {
+        // Ищем кнопки отправки на сбор
+        const buttons = row.querySelectorAll('button, input[type="submit"], .btn');
+        const scavengeButtons = Array.from(buttons).filter(btn => {
+            const text = btn.textContent;
+            return text.includes('Отправить') || 
+                   text.includes('Send') || 
+                   text.includes('Сбор') ||
+                   btn.getAttribute('onclick')?.includes('scavenge');
+        });
+        
+        if (scavengeButtons.length > 0) {
+            return true;
+        }
+        
+        // Ищем выпадающие списки категорий
+        const selects = row.querySelectorAll('select');
+        if (selects.length > 0) {
+            return true;
+        }
+        
+        return false;
+    }
+
+    function extractVillageInfoFromRow(row) {
+        const villageLink = findVillageLinkWithCoords(row);
+        if (!villageLink) {
+            return null;
+        }
+        
+        const villageHref = villageLink.getAttribute('href');
+        const villageIdMatch = villageHref.match(/village=(\d+)/);
+        if (!villageIdMatch) {
+            return null;
+        }
+        
+        const villageId = villageIdMatch[1];
+        const villageName = villageLink.textContent.trim();
+        
+        addDebugLog(`Деревня: ${villageName} (ID:${villageId})`, 'success');
+        
+        return {
+            id: villageId,
+            name: villageName
+        };
+    }
 
     function getAccurateLocalUnitsFromRow(row, villageName) {
         const units = {};
@@ -771,7 +926,79 @@
         addDebugLog(`Итоговая грузоподъемность: ${finalCapacity}`, 'success');
     }
 
-    // ... (функции getRealCategoryOptions, getUnitName остаются такими же)
+    function getRealCategoryOptions(row) {
+        const options = {};
+        
+        try {
+            addDebugLog('Поиск элементов управления категориями...', 'info');
+            
+            const buttons = row.querySelectorAll('button, input[type="submit"], .btn');
+            const selects = row.querySelectorAll('select');
+            
+            addDebugLog(`Найдено: кнопок=${buttons.length}, селектов=${selects.length}`, 'info');
+            
+            if (selects.length > 0) {
+                // Используем выпадающий список
+                const select = selects[0];
+                for (let i = 1; i <= 4; i++) {
+                    options[i] = {
+                        is_locked: false,
+                        scavenging_squad: null,
+                        available: true,
+                        name: categoryNames[i] || `Категория ${i}`
+                    };
+                }
+                addDebugLog('Используем выпадающий список категорий', 'success');
+            } else if (buttons.length >= 4) {
+                // Используем отдельные кнопки для каждой категории
+                for (let i = 1; i <= 4; i++) {
+                    const button = buttons[i-1];
+                    const isLocked = button.disabled || 
+                                    button.classList.contains('disabled') ||
+                                    button.textContent.includes('Locked') ||
+                                    button.textContent.includes('Заблокировано');
+                    
+                    options[i] = {
+                        is_locked: isLocked,
+                        scavenging_squad: null,
+                        available: !isLocked,
+                        name: categoryNames[i] || `Категория ${i}`
+                    };
+                    
+                    addDebugLog(`Категория ${i}: ${isLocked ? 'заблокирована' : 'доступна'}`, isLocked ? 'warning' : 'success');
+                }
+            } else {
+                // Если не удалось определить, считаем все доступными
+                for (let i = 1; i <= 4; i++) {
+                    options[i] = {
+                        is_locked: false,
+                        scavenging_squad: null,
+                        available: true,
+                        name: categoryNames[i] || `Категория ${i}`
+                    };
+                }
+                addDebugLog('Категории: все доступны (по умолчанию)', 'info');
+            }
+            
+        } catch (e) {
+            addDebugLog(`Ошибка определения категорий: ${e.message}`, 'error');
+            for (let i = 1; i <= 4; i++) {
+                options[i] = {
+                    is_locked: false,
+                    scavenging_squad: null,
+                    available: true,
+                    name: categoryNames[i] || `Категория ${i}`
+                };
+            }
+        }
+        
+        return options;
+    }
+
+    function getUnitName(unitId) {
+        const unit = worldUnits.find(u => u.id === unitId);
+        return unit ? unit.name : unitId;
+    }
 
     function calculateScavengingSquads(villages) {
         addDebugLog(`Расчет отрядов для ${villages.length} деревень...`, 'info');
@@ -1091,7 +1318,27 @@
         scheduleNextRun();
     }
 
-       // ========== ИНТЕРФЕЙС НАСТРОЕК G4LKIR95 ==========
+    function scheduleNextRun() {
+        if (repeatEnabled && currentRepeat < repeatCount && isRunning) {
+            const intervalMs = repeatInterval * 60 * 1000;
+            addDebugLog(`Следующий запуск через ${repeatInterval} минут`, 'info');
+            updateProgress(`⏰ Следующий запуск через ${repeatInterval} минут...`);
+            showNotification(`Следующий запуск через ${repeatInterval} минут`, 'info');
+            
+            repeatTimer = setTimeout(() => {
+                if (isRunning) {
+                    window.location.reload();
+                }
+            }, intervalMs);
+        } else {
+            isRunning = false;
+            updateUIStatus(false, 
+                repeatEnabled ? `Все повторы завершены (${currentRepeat})` : 'Сбор завершен'
+            );
+        }
+    }
+
+    // ========== ИНТЕРФЕЙС И УПРАВЛЕНИЕ ==========
     function createSettingsInterface() {
         return `
             <div class="g4lkir95-section">
@@ -1402,17 +1649,18 @@
     };
     window.g4lkir95ClearLogs = clearDebugLogs;
 
+
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
-        console.log('G4lKir95: Initializing v4.5 with improved calculations...');
+        console.log('G4lKir95: Initializing v4.6 with complete functionality...');
         const styleSheet = document.createElement('style');
         styleSheet.textContent = styles;
         document.head.appendChild(styleSheet);
         loadSophieSettings();
         addLaunchButton();
         setTimeout(createInterface, 500);
-        addDebugLog('G4lKir95 Mass Scavenging v4.5 активирован! Улучшенные расчеты.', 'success');
-        showNotification('G4lKir95 Mass Scavenging v4.5 активирован!', 'success');
+        addDebugLog('G4lKir95 Mass Scavenging v4.6 активирован! Полный функционал.', 'success');
+        showNotification('G4lKir95 Mass Scavenging v4.6 активирован!', 'success');
     }
 
     if (document.readyState === 'loading') {
