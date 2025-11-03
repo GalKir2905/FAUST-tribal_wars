@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         FAUST Tribal Wars Mass Scavenging v4.9.7
+// @name         FAUST Tribal Wars Mass Scavenging v4.9.8
 // @namespace    http://tampermonkey.net/
-// @version      4.9.6
+// @version      4.9.8
 // @description  Массовый сбор ресурсов с учетом времени возвращения
 // @author       G4lKir95 & Sophie
 // @match        https://*.tribalwars.com.ua/game.php*
@@ -901,6 +901,7 @@
         };
     }
 
+    // УЛУЧШЕННАЯ ФУНКЦИЯ ОПРЕДЕЛЕНИЯ ВОЙСК
     function getAccurateLocalUnitsFromRow(row, villageName) {
         const units = {};
         
@@ -912,29 +913,76 @@
             
             addDebugLog(`Точный поиск войск для деревни: ${villageName}`, 'info');
             
-            // Получаем весь текст строки для анализа
-            const text = row.textContent;
-            addDebugLog(`Текст строки: ${text.substring(0, 200)}...`, 'info');
+            // СПЕЦИАЛЬНЫЙ МЕТОД: ищем таблицу с войсками
+            const troopTables = row.querySelectorAll('table');
+            let foundTroops = false;
             
-            // Ищем реальное количество доступных войск
-            let availableTroops = findRealAvailableTroops(row, text);
-            
-            // Если не нашли точное количество, используем альтернативные методы
-            if (availableTroops === 0) {
-                availableTroops = findTroopsByAlternativeMethods(row, text);
+            for (let table of troopTables) {
+                const rows = table.querySelectorAll('tr');
+                
+                for (let tr of rows) {
+                    const cells = tr.querySelectorAll('td');
+                    const rowText = tr.textContent.toLowerCase();
+                    
+                    // Ищем строки с названиями юнитов
+                    worldUnits.forEach(unit => {
+                        if (rowText.includes(unit.name.toLowerCase()) || 
+                            rowText.includes(unit.id)) {
+                            
+                            // В соседних ячейках ищем числа
+                            for (let cell of cells) {
+                                const numbers = cell.textContent.match(/\d+/g);
+                                if (numbers) {
+                                    for (let num of numbers) {
+                                        const count = parseInt(num);
+                                        // Проверяем что это разумное количество войск
+                                        if (count > 0 && count < 100000) {
+                                            units[unit.id] = count;
+                                            addDebugLog(`Найдено ${unit.name}: ${count}`, 'success');
+                                            foundTroops = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                if (units[unit.id] > 0) break;
+                            }
+                        }
+                    });
+                }
             }
             
-            addDebugLog(`Определено доступных войск: ${availableTroops}`, 'success');
+            // ЕСЛИ НЕ НАШЛИ ТАБЛИЦУ, используем улучшенный текстовый поиск
+            if (!foundTroops) {
+                const text = row.textContent;
+                worldUnits.forEach(unit => {
+                    // Ищем паттерн: "НазваниеЮнита число"
+                    const pattern = new RegExp(unit.name + '[^\\d]*(\\d+)', 'i');
+                    const match = text.match(pattern);
+                    if (match) {
+                        units[unit.id] = parseInt(match[1]);
+                        addDebugLog(`Текстовый поиск: ${unit.name} - ${units[unit.id]}`, 'info');
+                    }
+                });
+            }
             
-            // Распределяем войска пропорционально вместимости выбранных типов
-            distributeTroopsToUnits(units, availableTroops);
-            
-            // Логируем результат
+            // Логируем итоговое распределение
+            let totalFound = 0;
             Object.keys(units).forEach(unitType => {
                 if (units[unitType] > 0) {
+                    totalFound += units[unitType];
                     addDebugLog(`  ${getUnitName(unitType)}: ${units[unitType]}`, 'info');
                 }
             });
+            
+            if (totalFound === 0) {
+                addDebugLog('Не удалось определить войска, используем значения по умолчанию', 'warning');
+                // Значения по умолчанию для тестирования
+                worldUnits.forEach(unit => {
+                    if (troopTypesEnabled[unit.id]) {
+                        units[unit.id] = 100;
+                    }
+                });
+            }
             
         } catch (e) {
             addDebugLog(`Ошибка парсинга войск: ${e.message}`, 'error');
@@ -945,191 +993,6 @@
         }
         
         return units;
-    }
-
-    function findRealAvailableTroops(row, text) {
-        let availableTroops = 0;
-        
-        // Паттерны для поиска количества войск в разных форматах
-        const troopPatterns = [
-            // Формат "доступно/всего" - берем первое число
-            /(\d+)\s*\/\s*\d+/,
-            // Формат "число доступно"
-            /(\d+)\s+(?:доступно|available|в строю)/i,
-            // Формат "Войска: число"
-            /[Вв]ойска[:\s]*(\d+)/i,
-            // Формат "Troops: число"  
-            /[Tt]roops[:\s]*(\d+)/i,
-            // Просто большие числа в контексте войск
-            /(\d{3,})\s*(?:шт|units|войск)/i
-        ];
-        
-        // Сначала ищем по паттернам
-        for (const pattern of troopPatterns) {
-            const match = text.match(pattern);
-            if (match) {
-                const foundTroops = parseInt(match[1]);
-                if (foundTroops > 0) {
-                    availableTroops = foundTroops;
-                    addDebugLog(`Найдено войск по паттерну "${pattern}": ${availableTroops}`, 'success');
-                    break;
-                }
-            }
-        }
-        
-        // Если не нашли по паттернам, ищем таблицу с войсками
-        if (availableTroops === 0) {
-            availableTroops = findTroopsFromTable(row);
-        }
-        
-        return availableTroops;
-    }
-
-    function findTroopsFromTable(row) {
-        let availableTroops = 0;
-        
-        // Ищем таблицу с войсками внутри строки
-        const troopTables = row.querySelectorAll('table');
-        
-        for (let table of troopTables) {
-            const tableText = table.textContent;
-            
-            // Ищем числа в таблице, которые могут быть количеством войск
-            const numbers = tableText.match(/\d+/g);
-            if (numbers) {
-                for (let num of numbers) {
-                    const troopCount = parseInt(num);
-                    // Предполагаем, что количество войск обычно в диапазоне 10-100000
-                    if (troopCount >= 10 && troopCount <= 100000) {
-                        availableTroops = troopCount;
-                        addDebugLog(`Найдено войск из таблицы: ${availableTroops}`, 'success');
-                        break;
-                    }
-                }
-            }
-            
-            if (availableTroops > 0) break;
-        }
-        
-        return availableTroops;
-    }
-
-    function findTroopsByAlternativeMethods(row, text) {
-        let availableTroops = 0;
-        
-        // Метод 1: Ищем большие числа в тексте
-        const numbers = text.match(/\d+/g);
-        if (numbers) {
-            // Сортируем числа по убыванию и берем самое большое разумное
-            const largeNumbers = numbers.map(num => parseInt(num))
-                .filter(num => num >= 50 && num <= 50000)
-                .sort((a, b) => b - a);
-                
-            if (largeNumbers.length > 0) {
-                availableTroops = largeNumbers[0];
-                addDebugLog(`Найдено войск по большому числу: ${availableTroops}`, 'info');
-            }
-        }
-        
-        // Метод 2: Если все еще не нашли, используем эвристику
-        if (availableTroops === 0) {
-            // Для массового сбора обычно отправляют много войск
-            availableTroops = 1000; // консервативное значение по умолчанию
-            addDebugLog(`Используем войска по умолчанию: ${availableTroops}`, 'warning');
-        }
-        
-        return availableTroops;
-    }
-
-    function distributeTroopsToUnits(units, availableTroops) {
-        const enabledTroopTypes = worldUnits.filter(unit => troopTypesEnabled[unit.id]);
-        
-        if (enabledTroopTypes.length === 0) {
-            addDebugLog('❌ Нет выбранных типов войск для распределения!', 'error');
-            return;
-        }
-        
-        // Рассчитываем общую вместимость выбранных типов
-        const totalCapacity = enabledTroopTypes.reduce((sum, unit) => sum + unit.capacity, 0);
-        
-        addDebugLog(`Распределение ${availableTroops} войск по ${enabledTroopTypes.length} типам`, 'info');
-        
-        // УЛУЧШЕННОЕ РАСПРЕДЕЛЕНИЕ: пропорционально вместимости с минимумом
-        let remainingTroops = availableTroops;
-        const distributed = {};
-        
-        // Первый проход: базовое распределение
-        enabledTroopTypes.forEach((unit, index) => {
-            const share = unit.capacity / totalCapacity;
-            let unitCount = Math.floor(availableTroops * share);
-            
-            // Гарантируем минимум 1 юнит каждого типа если есть достаточно войск
-            if (unitCount === 0 && remainingTroops > 0 && enabledTroopTypes.length <= remainingTroops) {
-                unitCount = 1;
-            }
-            
-            // Не превышаем оставшиеся войска
-            unitCount = Math.min(unitCount, remainingTroops);
-            
-            if (unitCount > 0) {
-                distributed[unit.id] = unitCount;
-                remainingTroops -= unitCount;
-                addDebugLog(`  ${unit.name}: ${unitCount} (вместимость: ${unit.capacity})`, 'info');
-            }
-        });
-        
-        // Второй проход: распределяем оставшиеся войска
-        if (remainingTroops > 0) {
-            addDebugLog(`  Осталось нераспределенных войск: ${remainingTroops}`, 'info');
-            
-            // Распределяем пропорционально вместимости
-            const totalDistributedCapacity = enabledTroopTypes.reduce((sum, unit) => {
-                return sum + ((distributed[unit.id] || 0) * unit.capacity);
-            }, 0);
-            
-            if (totalDistributedCapacity > 0) {
-                enabledTroopTypes.forEach(unit => {
-                    if (remainingTroops <= 0) return;
-                    
-                    const currentCount = distributed[unit.id] || 0;
-                    const currentCapacity = currentCount * unit.capacity;
-                    const share = currentCapacity / totalDistributedCapacity;
-                    
-                    const additional = Math.min(
-                        Math.floor(remainingTroops * share),
-                        remainingTroops
-                    );
-                    
-                    if (additional > 0) {
-                        distributed[unit.id] = currentCount + additional;
-                        remainingTroops -= additional;
-                        addDebugLog(`  Добавлено ${additional} ${unit.name}`, 'info');
-                    }
-                });
-            }
-        }
-        
-        // Если все еще остались войска, добавляем к первому типу
-        if (remainingTroops > 0 && enabledTroopTypes.length > 0) {
-            const firstUnit = enabledTroopTypes[0].id;
-            distributed[firstUnit] = (distributed[firstUnit] || 0) + remainingTroops;
-            addDebugLog(`  Добавлено ${remainingTroops} к ${getUnitName(firstUnit)}`, 'info');
-        }
-        
-        // Копируем распределенные значения в итоговый объект
-        Object.assign(units, distributed);
-        
-        // Рассчитываем итоговую грузоподъемность
-        const finalCapacity = calculateTotalCapacity(units);
-        addDebugLog(`Итоговая грузоподъемность: ${finalCapacity}`, 'success');
-        
-        // Логируем итоговое распределение
-        let totalDistributed = 0;
-        Object.keys(distributed).forEach(unitId => {
-            totalDistributed += distributed[unitId];
-        });
-        addDebugLog(`Всего распределено войск: ${totalDistributed}/${availableTroops}`, 
-                    totalDistributed === availableTroops ? 'success' : 'warning');
     }
 
     function getRealCategoryOptions(row) {
@@ -1614,65 +1477,72 @@
         });
     }
 
-    // Функция для отправки уже активированной категории
+    // УЛУЧШЕННАЯ ФУНКЦИЯ ДЛЯ ОТПРАВКИ АКТИВИРОВАННОЙ КАТЕГОРИИ
     function sendActivatedCategory(row, squad, categoryElement) {
         return new Promise((resolve) => {
             addDebugLog(`Отправка активированной категории ${squad.option_id}...`, 'info');
 
-            // Ждем немного для стабилизации интерфейса
+            // ДОБАВЛЕНО: Ждем дольше для полной активации категории
             setTimeout(() => {
-                // Ищем кнопку отправки
-                const sendButton = findSendButton(row);
+                // ДОБАВЛЕНО: Проверяем, что категория действительно активировалась
+                const isActive = categoryElement.className.includes('option-active');
                 
-                if (sendButton && !sendButton.disabled) {
-                    addDebugLog('✅ Найдена активная кнопка отправки', 'success');
+                if (!isActive) {
+                    addDebugLog('❌ Категория не активировалась, пробуем еще раз...', 'warning');
+                    // Пробуем кликнуть еще раз
+                    categoryElement.click();
                     
-                    // Кликаем на кнопку отправки
-                    sendButton.click();
-                    addDebugLog(`✅ Отряд отправлен: ${squad.village_name} -> ${squad.category_name}`, 'success');
-                    
-                    resolve(true);
-                } else {
-                    addDebugLog('❌ Кнопка отправки не найдена или заблокирована', 'error');
-                    
-                    // Альтернативная стратегия: ищем форму отправки
-                    const form = findScavengeForm(row);
-                    if (form) {
-                        addDebugLog('Пробуем отправить форму напрямую...', 'info');
-                        form.submit();
-                        resolve(true);
-                    } else {
-                        resolve(false);
-                    }
+                    setTimeout(() => {
+                        attemptSend(row, resolve);
+                    }, 1000);
+                    return;
                 }
-            }, 1500);
+                
+                attemptSend(row, resolve);
+            }, 2000); // УВЕЛИЧЕНО время ожидания
         });
     }
 
-    // Функция поиска формы отправки
-    function findScavengeForm(row) {
-        const forms = row.querySelectorAll('form');
-        for (let form of forms) {
-            if (form.action.includes('scavenge') || form.innerHTML.includes('scavenge')) {
-                return form;
+    // НОВАЯ ФУНКЦИЯ: Попытка отправки
+    function attemptSend(row, resolve) {
+        // УЛУЧШЕННЫЙ ПОИСК КНОПКИ ОТПРАВКИ
+        const sendButton = findSendButtonImproved(row);
+        
+        if (sendButton && !sendButton.disabled) {
+            addDebugLog('✅ Найдена активная кнопка отправки', 'success');
+            
+            // ДОБАВЛЕНО: Кликаем более надежным методом
+            reliableClick(sendButton);
+            addDebugLog('✅ Клик на кнопку отправки выполнен', 'success');
+            
+            resolve(true);
+        } else {
+            addDebugLog('❌ Кнопка отправки не найдена или заблокирована', 'error');
+            
+            // УЛУЧШЕННЫЙ ПОИСК ФОРМЫ
+            const form = findScavengeFormImproved(row);
+            if (form) {
+                addDebugLog('Пробуем отправить форму напрямую...', 'info');
+                form.submit();
+                resolve(true);
+            } else {
+                // ПОСЛЕДНЯЯ ПОПЫТКА: ищем любую кнопку отправки на странице
+                const anySendButton = document.querySelector('input[value*="Отправить"], input[value*="Send"], button[type="submit"]');
+                if (anySendButton && !anySendButton.disabled) {
+                    addDebugLog('Найдена кнопка отправки вне строки, пробуем использовать...', 'warning');
+                    reliableClick(anySendButton);
+                    resolve(true);
+                } else {
+                    resolve(false);
+                }
             }
         }
-        
-        // Ищем форму по содержанию
-        const allForms = document.querySelectorAll('form');
-        for (let form of allForms) {
-            const html = form.innerHTML;
-            if (html.includes('option-') && html.includes('собиратели')) {
-                return form;
-            }
-        }
-        
-        return null;
     }
 
-    function findSendButton(row) {
+    // УЛУЧШЕННАЯ ФУНКЦИЯ ПОИСКА КНОПКИ
+    function findSendButtonImproved(row) {
         // Расширяем поиск кнопки отправки
-        const buttons = row.querySelectorAll('button, input[type="submit"], input[type="button"]');
+        const buttons = row.querySelectorAll('button, input[type="submit"], input[type="button"], .btn');
         
         // Приоритетные селекторы для кнопки отправки
         const sendButtonSelectors = [
@@ -1681,8 +1551,10 @@
             'button[type="submit"]',
             '.btn-confirm',
             '.btn-send',
+            '.btn-default',
             '[class*="send"]',
-            '[class*="submit"]'
+            '[class*="submit"]',
+            '[onclick*="scavenge"]'
         ];
         
         // Сначала ищем по приоритетным селекторам
@@ -1694,14 +1566,16 @@
             }
         }
         
-        // Затем ищем по тексту
+        // Затем ищем по тексту/значению
         for (let button of buttons) {
             const text = (button.textContent || button.value || '').toLowerCase().trim();
             const isSendButton = text === 'отправить' || 
                                text === 'send' || 
                                text === 'сбор' ||
                                text.includes('отправ') ||
-                               text.includes('send');
+                               text.includes('send') ||
+                               text === 'ok' ||
+                               text === 'подтвердить';
             
             if (isSendButton && !button.disabled) {
                 addDebugLog(`Найдена кнопка отправки по тексту: "${text}"`, 'success');
@@ -1709,21 +1583,77 @@
             }
         }
         
-        // Если не нашли, возвращаем первую доступную кнопку, которая не является категорией
+        // Если не нашли, возвращаем первую доступную кнопку
         for (let button of buttons) {
-            const text = (button.textContent || button.value || '').toLowerCase();
-            const isCategoryButton = text.includes('+20%') || 
-                                   text.includes('premium') ||
-                                   button.className.includes('option-');
-            
-            if (!button.disabled && !isCategoryButton) {
-                addDebugLog(`Используем альтернативную кнопку: "${text}"`, 'warning');
-                return button;
+            if (!button.disabled) {
+                const text = (button.textContent || button.value || '').toLowerCase();
+                const isCategoryButton = text.includes('+20%') || 
+                                       text.includes('premium') ||
+                                       button.className.includes('option-');
+                
+                if (!isCategoryButton) {
+                    addDebugLog(`Используем альтернативную кнопку: "${text}"`, 'warning');
+                    return button;
+                }
             }
         }
         
         addDebugLog('❌ Не найдена подходящая кнопка отправки', 'error');
         return null;
+    }
+
+    // УЛУЧШЕННАЯ ФУНКЦИЯ ПОИСКА ФОРМЫ
+    function findScavengeFormImproved(row) {
+        // Ищем форму в строке
+        const forms = row.querySelectorAll('form');
+        for (let form of forms) {
+            if (form.action.includes('scavenge') || form.innerHTML.includes('scavenge')) {
+                return form;
+            }
+        }
+        
+        // Ищем форму по содержанию
+        const allForms = document.querySelectorAll('form');
+        for (let form of allForms) {
+            const html = form.innerHTML;
+            if ((html.includes('option-') && html.includes('собиратели')) || 
+                html.includes('scavenge_mass')) {
+                return form;
+            }
+        }
+        
+        // Ищем форму по атрибутам
+        const formsWithScavenge = document.querySelectorAll('form[action*="scavenge"], form[id*="scavenge"]');
+        if (formsWithScavenge.length > 0) {
+            return formsWithScavenge[0];
+        }
+        
+        return null;
+    }
+
+    // НОВАЯ ФУНКЦИЯ: Надежный клик
+    function reliableClick(element) {
+        try {
+            // Пробуем разные методы клика
+            if (element.click) {
+                element.click();
+            } else if (element.dispatchEvent) {
+                const clickEvent = new MouseEvent('click', {
+                    view: window,
+                    bubbles: true,
+                    cancelable: true
+                });
+                element.dispatchEvent(clickEvent);
+            }
+            
+            // Дополнительно фокусируем элемент
+            if (element.focus) element.focus();
+            
+            return true;
+        } catch (e) {
+            addDebugLog(`Ошибка при клике: ${e.message}`, 'error');
+            return false;
+        }
     }
 
     function completeRealScavenging() {
@@ -1862,7 +1792,7 @@
         panel.className = 'g4lkir95-panel';
         panel.innerHTML = `
             <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
-            <div class="g4lkir95-header">Mass Scavenging v4.9.7</div>
+            <div class="g4lkir95-header">Mass Scavenging v4.9.8</div>
             ${createSettingsInterface()}
         `;
 
@@ -2098,7 +2028,7 @@
 
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
-        console.log('G4lKir95: Initializing v4.9.7 with compact interface...');
+        console.log('G4lKir95: Initializing v4.9.8 with FIXES...');
         
         // Проверяем, что мы на правильной странице
         if (window.location.href.indexOf('mode=scavenge_mass') === -1) {
@@ -2107,14 +2037,22 @@
             return;
         }
         
+        // ДОБАВЛЕНО: Проверка что интерфейс массового сбора полностью загружен
+        if (window.location.href.indexOf('mode=scavenge_mass') !== -1) {
+            setTimeout(() => {
+                addDebugLog('Проверка загрузки интерфейса массового сбора...', 'info');
+                debugScavengeInterface();
+            }, 2000);
+        }
+        
         const styleSheet = document.createElement('style');
         styleSheet.textContent = styles;
         document.head.appendChild(styleSheet);
         loadSophieSettings();
         addLaunchButton();
         setTimeout(createInterface, 500);
-        addDebugLog('G4lKir95 Mass Scavenging v4.9.7 активирован! Компактный интерфейс.', 'success');
-        showNotification('G4lKir95 Mass Scavenging v4.9.7 активирован!', 'success');
+        addDebugLog('G4lKir95 Mass Scavenging v4.9.8 активирован! Исправлены проблемы с отправкой.', 'success');
+        showNotification('G4lKir95 Mass Scavenging v4.9.8 активирован!', 'success');
     }
 
     if (document.readyState === 'loading') {
