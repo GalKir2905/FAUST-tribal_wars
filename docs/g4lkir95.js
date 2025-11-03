@@ -1511,79 +1511,186 @@
     }
 
     function sendSquadToVillage(row, squad) {
-        try {
-            addDebugLog(`Отправка отряда в деревню ${squad.village_name}...`, 'info');
-            
-            // Более детальный поиск элементов управления
-            const buttons = row.querySelectorAll('button, input[type="submit"], input[type="button"], .btn, .button');
-            const selects = row.querySelectorAll('select');
-            
-            addDebugLog(`Найдено элементов в строке: кнопок=${buttons.length}, селектов=${selects.length}`, 'info');
-            
-            // Логируем все найденные кнопки для отладки
-            buttons.forEach((btn, index) => {
-                const text = btn.textContent || btn.value || '';
-                addDebugLog(`Кнопка ${index}: "${text.substring(0, 30)}"`, 'info');
-            });
+    try {
+        addDebugLog(`Отправка отряда в деревню ${squad.village_name}...`, 'info');
+        analyzeInterface(row);
+        // Более детальный поиск элементов управления
+        const buttons = row.querySelectorAll('button, input[type="submit"], input[type="button"], .btn, .button');
+        const selects = row.querySelectorAll('select');
+        
+        addDebugLog(`Найдено элементов в строке: кнопок=${buttons.length}, селектов=${selects.length}`, 'info');
+        
+        // Логируем все найденные элементы для отладки
+        buttons.forEach((btn, index) => {
+            const text = btn.textContent || btn.value || '';
+            addDebugLog(`Кнопка ${index}: "${text}"`, 'info');
+        });
+        
+        selects.forEach((select, index) => {
+            addDebugLog(`Селект ${index}: options=${select.options.length}`, 'info');
+        });
 
-            if (selects.length > 0) {
-                // Используем выпадающий список
-                const select = selects[0];
-                addDebugLog(`Установка категории ${squad.option_id} в выпадающем списке`, 'info');
-                select.value = squad.option_id;
+        // Сначала пытаемся найти и выбрать категорию
+        let categorySelected = false;
+        
+        if (selects.length > 0) {
+            // Используем выпадающий список для выбора категории
+            const select = selects[0];
+            addDebugLog(`Установка категории ${squad.option_id} в выпадающем списке`, 'info');
+            
+            // Ищем опцию с нужной категорией
+            let optionFound = false;
+            for (let i = 0; i < select.options.length; i++) {
+                const option = select.options[i];
+                const optionText = option.textContent.toLowerCase();
                 
+                // Проверяем, соответствует ли опция нашей категории
+                if (isOptionForCategory(optionText, squad.option_id) || option.value == squad.option_id) {
+                    select.value = option.value;
+                    optionFound = true;
+                    addDebugLog(`✅ Выбрана категория: ${option.textContent}`, 'success');
+                    break;
+                }
+            }
+            
+            if (!optionFound && select.options.length > squad.option_id - 1) {
+                // Если не нашли по тексту, используем индекс
+                select.selectedIndex = squad.option_id - 1;
+                addDebugLog(`✅ Выбрана категория по индексу: ${squad.option_id}`, 'success');
+                optionFound = true;
+            }
+            
+            if (optionFound) {
                 // Триггерим событие изменения
                 select.dispatchEvent(new Event('change', { bubbles: true }));
+                categorySelected = true;
                 
-                // Ищем кнопку отправки
-                const sendButton = findSendButton(row);
-                if (sendButton && !sendButton.disabled) {
-                    addDebugLog('Найдена кнопка отправки, кликаем...', 'success');
-                    sendButton.click();
-                    return true;
-                } else {
-                    addDebugLog('Кнопка отправки не найдена или заблокирована', 'error');
-                    return false;
+                // Даем время на обновление интерфейса
+                setTimeout(() => {
+                    // Ищем кнопку отправки после выбора категории
+                    const sendButton = findSendButton(row);
+                    if (sendButton && !sendButton.disabled) {
+                        addDebugLog('Найдена кнопка отправки, кликаем...', 'success');
+                        sendButton.click();
+                    } else {
+                        addDebugLog('Кнопка отправки не найдена или заблокирована после выбора категории', 'error');
+                    }
+                }, 500);
+                
+                return true;
+            }
+        } else if (buttons.length > 0) {
+            // Пробуем найти отдельные кнопки для каждой категории
+            let categoryButton = null;
+            
+            for (let i = 0; i < buttons.length; i++) {
+                const button = buttons[i];
+                const text = (button.textContent || button.value || '').toLowerCase();
+                
+                // Проверяем, соответствует ли кнопка категории
+                if (!button.disabled && isButtonForCategory(text, squad.option_id)) {
+                    categoryButton = button;
+                    addDebugLog(`✅ Найдена кнопка для категории ${squad.category_name}`, 'success');
+                    break;
                 }
-            } else if (buttons.length > 0) {
-                // Пробуем найти кнопку по категории
-                let buttonFound = false;
+            }
+            
+            if (categoryButton) {
+                // Кликаем на кнопку категории
+                categoryButton.click();
+                categorySelected = true;
                 
+                // Даем время на применение категории
+                setTimeout(() => {
+                    // Ищем кнопку отправки
+                    const sendButton = findSendButton(row);
+                    if (sendButton && !sendButton.disabled) {
+                        addDebugLog('Найдена кнопка отправки, кликаем...', 'success');
+                        sendButton.click();
+                    } else {
+                        addDebugLog('Кнопка отправки не найдена или заблокирована', 'error');
+                    }
+                }, 500);
+                
+                return true;
+            } else {
+                addDebugLog('❌ Не найдена кнопка для выбора категории', 'error');
+                
+                // Альтернативная стратегия: ищем кнопки с числовыми значениями (1, 2, 3, 4)
                 for (let i = 0; i < buttons.length; i++) {
                     const button = buttons[i];
-                    const text = (button.textContent || button.value || '').toLowerCase();
+                    const text = (button.textContent || button.value || '').trim();
                     
-                    // Проверяем, соответствует ли кнопка категории
-                    if (!button.disabled && isButtonForCategory(text, squad.option_id)) {
-                        addDebugLog(`Найдена кнопка для категории ${squad.category_name}, кликаем...`, 'success');
+                    if (!button.disabled && (text === squad.option_id.toString() || 
+                        text === 'Cat. ' + squad.option_id || 
+                        text === 'Кат. ' + squad.option_id)) {
+                        addDebugLog(`✅ Найдена числовая кнопка категории: ${text}`, 'success');
                         button.click();
-                        buttonFound = true;
-                        break;
+                        categorySelected = true;
+                        
+                        setTimeout(() => {
+                            const sendButton = findSendButton(row);
+                            if (sendButton && !sendButton.disabled) {
+                                sendButton.click();
+                            }
+                        }, 500);
+                        
+                        return true;
                     }
                 }
-                
-                if (!buttonFound) {
-                    // Если не нашли по категории, используем первую доступную кнопку
-                    for (let i = 0; i < buttons.length; i++) {
-                        const button = buttons[i];
-                        if (!button.disabled) {
-                            addDebugLog(`Используем первую доступную кнопку: "${button.textContent}"`, 'warning');
-                            button.click();
-                            buttonFound = true;
-                            break;
-                        }
-                    }
-                }
-                
-                return buttonFound;
-            } else {
-                addDebugLog('Не найдены элементы управления для отправки', 'error');
-                return false;
             }
-        } catch (e) {
-            addDebugLog(`Ошибка при отправке: ${e.message}`, 'error');
-            return false;
         }
+        
+        if (!categorySelected) {
+            addDebugLog('❌ Не удалось выбрать категорию, пробуем альтернативный метод...', 'warning');
+            
+            // Альтернативный метод: ищем любые элементы, которые могут быть селекторами категорий
+            const allInputs = row.querySelectorAll('input[type="radio"], input[type="checkbox"]');
+            for (let input of allInputs) {
+                const name = input.name || '';
+                const value = input.value || '';
+                
+                if (name.includes('category') || name.includes('cat') || name.includes('option')) {
+                    if (value == squad.option_id || input.id.includes(squad.option_id)) {
+                        addDebugLog(`✅ Найден элемент выбора категории: ${name}=${value}`, 'success');
+                        input.click();
+                        categorySelected = true;
+                        
+                        setTimeout(() => {
+                            const sendButton = findSendButton(row);
+                            if (sendButton && !sendButton.disabled) {
+                                sendButton.click();
+                            }
+                        }, 500);
+                        
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        addDebugLog('❌ Не удалось отправить отряд: не найдены элементы выбора категории', 'error');
+        return false;
+        
+    } catch (e) {
+        addDebugLog(`Ошибка при отправке: ${e.message}`, 'error');
+        return false;
+    }
+    }
+
+    function isOptionForCategory(optionText, categoryId) {
+        const text = optionText.toLowerCase();
+        
+        // Соответствие категорий и текста опций
+        const categoryPatterns = {
+            1: ['ленив', 'lazy', '1', 'мал', 'cat. 1', 'кат. 1'],
+            2: ['быстр', 'fast', '2', 'сред', 'cat. 2', 'кат. 2'],
+            3: ['находч', 'clever', '3', 'бол', 'cat. 3', 'кат. 3'],
+            4: ['жадн', 'greedy', '4', 'макс', 'cat. 4', 'кат. 4']
+        };
+        
+        const patterns = categoryPatterns[categoryId] || [];
+        return patterns.some(pattern => text.includes(pattern));
     }
     
     // Вспомогательная функция для определения категории кнопки
@@ -1592,10 +1699,10 @@
         
         // Соответствие категорий и текста кнопок
         const categoryPatterns = {
-            1: ['ленив', 'lazy', '1', 'мал'],
-            2: ['быстр', 'fast', '2', 'сред'],
-            3: ['находч', 'clever', '3', 'бол'],
-            4: ['жадн', 'greedy', '4', 'макс']
+            1: ['ленив', 'lazy', 'cat. 1', 'кат. 1', 'category 1'],
+            2: ['быстр', 'fast', 'cat. 2', 'кат. 2', 'category 2'],
+            3: ['находч', 'clever', 'cat. 3', 'кат. 3', 'category 3'],
+            4: ['жадн', 'greedy', 'cat. 4', 'кат. 4', 'category 4']
         };
         
         const patterns = categoryPatterns[categoryId] || [];
@@ -1606,20 +1713,44 @@
         // Расширяем поиск кнопки отправки
         const buttons = row.querySelectorAll('button, input[type="submit"], input[type="button"], .btn, .button');
         
+        // Сначала ищем по точному тексту
+        for (let button of buttons) {
+            const text = (button.textContent || button.value || '').toLowerCase().trim();
+            if ((text === 'отправить' || text === 'send' || text === 'сбор') && !button.disabled) {
+                return button;
+            }
+        }
+        
+        // Затем ищем по частичному совпадению
         for (let button of buttons) {
             const text = (button.textContent || button.value || '').toLowerCase();
-            if ((text.includes('отправить') || 
-                 text.includes('send') || 
-                 text.includes('сбор') ||
-                 text.includes('отпр')) && 
+            if ((text.includes('отправ') || text.includes('send') || text.includes('сбор')) && 
                 !button.disabled) {
                 return button;
             }
         }
         
-        // Если не нашли по тексту, возвращаем первую доступную кнопку
+        // Если не нашли по тексту, ищем по классам и ID
         for (let button of buttons) {
-            if (!button.disabled) {
+            const className = button.className || '';
+            const id = button.id || '';
+            
+            if ((className.includes('send') || className.includes('submit') || 
+                 id.includes('send') || id.includes('submit')) && !button.disabled) {
+                return button;
+            }
+        }
+        
+        // Если все еще не нашли, возвращаем первую доступную кнопку, которая не является кнопкой категории
+        for (let button of buttons) {
+            const text = (button.textContent || button.value || '').toLowerCase();
+            if (!button.disabled && 
+                !isButtonForCategory(text, 1) && 
+                !isButtonForCategory(text, 2) && 
+                !isButtonForCategory(text, 3) && 
+                !isButtonForCategory(text, 4) &&
+                !text.includes('+20%') && // Исключаем кнопки бонуса
+                !text.includes('premium')) {
                 return button;
             }
         }
