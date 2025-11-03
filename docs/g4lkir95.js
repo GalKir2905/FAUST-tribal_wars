@@ -6,6 +6,7 @@
 // @author       G4lKir95 & Sophie
 // @match        https://*.tribalwars.com.ua/game.php*
 // @match        https://*.tribalwars.net/game.php*
+// @match        https://*.voynaplemyon.com/game.php*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_notification
@@ -515,105 +516,100 @@
         const villages = [];
         
         try {
-            // Улучшенный поиск таблицы с деревнями
+            // УЛУЧШЕННЫЙ поиск таблицы с деревнями для массового сбора
             const possibleTables = [
-                '#scavenge_mass_content table',
-                '.mass_scavenge_table',
-                'table.vis',
                 'table#villages_table',
+                'table.vis.villages',
+                '.mass_scavenge_table',
+                '#scavenge_mass_content table',
+                'table.vis:not(:first-child)',
                 'table'
             ];
             
             let mainTable = null;
             let tableSource = '';
             
+            // Ищем таблицу, которая содержит информацию о деревнях для сбора
             for (const selector of possibleTables) {
-                mainTable = document.querySelector(selector);
-                if (mainTable) {
-                    tableSource = selector;
-                    break;
+                const tables = document.querySelectorAll(selector);
+                for (let table of tables) {
+                    const tableText = table.textContent;
+                    // Проверяем, что это таблица с деревнями для сбора (содержит кнопки отправки, названия деревень и т.д.)
+                    if (tableText.includes('Деревня') || 
+                        tableText.includes('Войска') || 
+                        tableText.includes('Отправить') ||
+                        table.querySelectorAll('button, input[type="submit"]').length > 0) {
+                        mainTable = table;
+                        tableSource = selector;
+                        addDebugLog(`Найдена потенциальная таблица через: ${selector}`, 'info');
+                        break;
+                    }
                 }
+                if (mainTable) break;
             }
             
             if (!mainTable) {
                 addDebugLog('❌ Таблица с деревнями не найдена!', 'error');
-                addDebugLog('Проверяемые селекторы: ' + possibleTables.join(', '), 'info');
                 
-                // Покажем все таблицы на странице для отладки
+                // Дополнительная диагностика
                 const allTables = document.querySelectorAll('table');
                 addDebugLog(`Всего таблиц на странице: ${allTables.length}`, 'info');
                 
                 allTables.forEach((table, index) => {
-                    const tableInfo = {
-                        index: index,
-                        class: table.className,
-                        id: table.id,
-                        rows: table.querySelectorAll('tr').length,
-                        text: table.textContent.substring(0, 100) + '...'
-                    };
-                    addDebugLog(`Таблица ${index}: classes="${tableInfo.class}", id="${tableInfo.id}", строк=${tableInfo.rows}`, 'info');
+                    const buttons = table.querySelectorAll('button, input[type="submit"]').length;
+                    const rows = table.querySelectorAll('tr').length;
+                    const textSample = table.textContent.substring(0, 100).replace(/\s+/g, ' ');
+                    
+                    addDebugLog(`Таблица ${index}: кнопок=${buttons}, строк=${rows}, текст="${textSample}"`, 'info');
+                    
+                    // Если в таблице есть кнопки и несколько строк, возможно это наша таблица
+                    if (buttons > 0 && rows > 1) {
+                        mainTable = table;
+                        addDebugLog(`✅ ВЫБРАНА таблица ${index} по количеству кнопок`, 'success');
+                    }
                 });
-                
+            }
+            
+            if (!mainTable) {
+                addDebugLog('❌ Не удалось найти подходящую таблицу!', 'error');
                 return villages;
             }
             
-            addDebugLog(`✅ Найдена таблица с деревнями: ${tableSource}`, 'success');
+            addDebugLog(`✅ Используем таблицу: ${tableSource}`, 'success');
             
             const rows = mainTable.querySelectorAll('tr');
             addDebugLog(`Таблица содержит ${rows.length} строк`, 'info');
             
-            // Логируем структуру таблицы для отладки
-            rows.forEach((row, index) => {
-                const cells = row.querySelectorAll('td, th');
-                addDebugLog(`Строка ${index}: ${cells.length} ячеек`, 'info');
-                
-                cells.forEach((cell, cellIndex) => {
-                    const cellText = cell.textContent.trim().substring(0, 50);
-                    if (cellText) {
-                        addDebugLog(`  Ячейка ${cellIndex}: "${cellText}"`, 'info');
-                    }
-                });
-            });
-            
+            // Обрабатываем строки таблицы
+            let processedRows = 0;
             rows.forEach((row, rowIndex) => {
                 try {
-                    if (rowIndex === 0) {
-                        addDebugLog('Пропускаем заголовок таблицы', 'info');
-                        return; // Пропускаем заголовок
-                    }
-                    
                     const cells = row.querySelectorAll('td');
                     if (cells.length < 3) {
-                        addDebugLog(`Строка ${rowIndex}: пропускаем - недостаточно ячеек (${cells.length})`, 'warning');
-                        return;
+                        return; // Пропускаем строки с недостаточным количеством ячеек
                     }
                     
-                    // Ищем ссылку на деревню в любой ячейке
-                    let villageLink = null;
-                    for (let cell of cells) {
-                        villageLink = cell.querySelector('a[href*="village"]');
-                        if (villageLink) break;
-                    }
-                    
+                    // Ищем ссылку на деревню
+                    const villageLink = row.querySelector('a[href*="village"]');
                     if (!villageLink) {
-                        addDebugLog(`Строка ${rowIndex}: ссылка на деревню не найдена`, 'warning');
-                        return;
+                        return; // Пропускаем строки без ссылки на деревню
                     }
                     
                     const villageHref = villageLink.getAttribute('href');
-                    if (!villageHref) {
-                        addDebugLog(`Строка ${rowIndex}: нет href у ссылки`, 'warning');
-                        return;
-                    }
-                    
                     const villageIdMatch = villageHref.match(/village=(\d+)/);
                     if (!villageIdMatch) {
-                        addDebugLog(`Строка ${rowIndex}: не удалось извлечь ID деревни`, 'warning');
                         return;
                     }
                     
                     const villageId = villageIdMatch[1];
                     const villageName = villageLink.textContent.trim();
+                    
+                    // Проверяем, есть ли кнопки отправки в этой строке
+                    const sendButtons = row.querySelectorAll('button, input[type="submit"]');
+                    if (sendButtons.length === 0) {
+                        addDebugLog(`Строка ${rowIndex}: нет кнопок отправки, пропускаем`, 'warning');
+                        return;
+                    }
                     
                     addDebugLog(`✅ Найдена деревня: ${villageName} (ID:${villageId})`, 'success');
                     
@@ -633,6 +629,7 @@
                         row: row
                     });
                     
+                    processedRows++;
                     addDebugLog(`Добавлена деревня: ${villageName}, войск: ${totalLocalTroops}`, 'success');
                     
                 } catch (e) {
@@ -640,7 +637,7 @@
                 }
             });
             
-            addDebugLog(`Всего обработано деревень: ${villages.length}`, 'success');
+            addDebugLog(`Всего обработано деревень: ${processedRows}`, 'success');
             return villages;
         } catch (e) {
             addDebugLog(`Критическая ошибка получения данных: ${e.message}`, 'error');
@@ -652,94 +649,63 @@
         const units = {};
         
         try {
-            const cells = row.querySelectorAll('td');
-            let troopsInfo = '';
+            // Инициализируем все юниты нулями
+            worldUnits.forEach(unit => {
+                units[unit.id] = 0;
+            });
             
-            // Ищем информацию о войсках в ячейках
+            // Пытаемся найти информацию о войсках в строке
+            const cells = row.querySelectorAll('td');
+            let troopsFound = false;
+            
             for (let cell of cells) {
                 const text = cell.textContent.trim();
                 
-                // Ищем формат "число/число" (доступно/всего)
-                if (text.match(/\d+\s*\/\s*\d+/)) {
-                    troopsInfo = text;
-                    addDebugLog(`Найдена информация о войсках: "${troopsInfo}"`, 'success');
-                    break;
-                }
-                
-                // Ищем просто числа (может быть только доступное количество)
+                // Ищем числа, которые могут обозначать количество войск
                 const numbers = text.match(/\d+/g);
-                if (numbers && numbers.length >= 1) {
-                    troopsInfo = text;
-                    addDebugLog(`Найдены числа в ячейке: "${troopsInfo}"`, 'info');
-                    break;
+                if (numbers && numbers.length >= 2) {
+                    // Если найдено несколько чисел, берем первое как доступные войска
+                    const availableTroops = parseInt(numbers[0]);
+                    
+                    if (availableTroops > 0) {
+                        // Распределяем войска пропорционально вместимости выбранных типов
+                        const enabledTroopTypes = worldUnits.filter(unit => troopTypesEnabled[unit.id]);
+                        
+                        if (enabledTroopTypes.length > 0) {
+                            const totalCapacity = enabledTroopTypes.reduce((sum, unit) => sum + unit.capacity, 0);
+                            
+                            enabledTroopTypes.forEach(unit => {
+                                const share = unit.capacity / totalCapacity;
+                                units[unit.id] = Math.max(1, Math.floor(availableTroops * share));
+                            });
+                            
+                            // Корректируем общее количество
+                            const allocated = Object.values(units).reduce((sum, count) => sum + count, 0);
+                            if (allocated < availableTroops) {
+                                const firstUnit = enabledTroopTypes[0].id;
+                                units[firstUnit] += (availableTroops - allocated);
+                            }
+                        }
+                        
+                        troopsFound = true;
+                        addDebugLog(`Определено войск для деревни: ${availableTroops}`, 'success');
+                        break;
+                    }
                 }
             }
             
-            if (troopsInfo) {
-                // Парсим информацию о войсках
-                const totalMatch = troopsInfo.match(/(\d+)\s*\/\s*(\d+)/);
-                if (totalMatch) {
-                    const availableTroops = parseInt(totalMatch[1]);
-                    const totalTroops = parseInt(totalMatch[2]);
-                    
-                    addDebugLog(`Доступно войск: ${availableTroops}/${totalTroops}`, 'success');
-                    
-                    // Для массового сбора считаем ВСЕ доступные войска
-                    const localTroops = availableTroops;
-                    
-                    // Распределяем войска по типам на основе выбранных типов
-                    const enabledTroopTypes = worldUnits.filter(unit => troopTypesEnabled[unit.id]);
-                    
-                    if (enabledTroopTypes.length > 0) {
-                        // Распределяем пропорционально вместимости
-                        const totalCapacity = enabledTroopTypes.reduce((sum, unit) => sum + unit.capacity, 0);
-                        
-                        enabledTroopTypes.forEach(unit => {
-                            const share = unit.capacity / totalCapacity;
-                            units[unit.id] = Math.max(1, Math.floor(localTroops * share));
-                        });
-                        
-                        // Корректируем общее количество
-                        const allocated = Object.values(units).reduce((sum, count) => sum + count, 0);
-                        if (allocated < localTroops) {
-                            // Добавляем остаток к первому типу
-                            const firstUnit = enabledTroopTypes[0].id;
-                            units[firstUnit] += (localTroops - allocated);
-                        }
-                    } else {
-                        // Если нет выбранных типов, равномерно распределяем
-                        worldUnits.forEach(unit => {
-                            units[unit.id] = Math.floor(localTroops / worldUnits.length);
-                        });
-                    }
-                } else {
-                    // Если не удалось распарсить формат число/число
-                    const numbers = troopsInfo.match(/\d+/g);
-                    if (numbers && numbers.length > 0) {
-                        const estimatedTroops = parseInt(numbers[0]);
-                        addDebugLog(`Примерное количество войск: ${estimatedTroops}`, 'info');
-                        
-                        worldUnits.forEach(unit => {
-                            units[unit.id] = troopTypesEnabled[unit.id] ? Math.max(10, Math.floor(estimatedTroops / 2)) : 0;
-                        });
-                    } else {
-                        addDebugLog('Не найдены числа в информации о войсках', 'warning');
-                        worldUnits.forEach(unit => {
-                            units[unit.id] = troopTypesEnabled[unit.id] ? 100 : 0;
-                        });
-                    }
-                }
-            } else {
+            if (!troopsFound) {
+                // Если не удалось определить количество, используем разумные значения по умолчанию
                 addDebugLog('Информация о войсках не найдена, используем значения по умолчанию', 'warning');
                 worldUnits.forEach(unit => {
-                    units[unit.id] = troopTypesEnabled[unit.id] ? 100 : 0;
+                    units[unit.id] = troopTypesEnabled[unit.id] ? 50 : 0;
                 });
             }
             
         } catch (e) {
             addDebugLog(`Ошибка парсинга войск: ${e.message}`, 'error');
             worldUnits.forEach(unit => {
-                units[unit.id] = troopTypesEnabled[unit.id] ? 100 : 0;
+                units[unit.id] = troopTypesEnabled[unit.id] ? 50 : 0;
             });
         }
         
@@ -760,13 +726,11 @@
             const buttons = row.querySelectorAll('button, input[type="submit"], input[type="button"]');
             const selects = row.querySelectorAll('select');
             
-            addDebugLog(`Найдено кнопок: ${buttons.length}, выпадающих списков: ${selects.length}`, 'info');
+            addDebugLog(`Найдено элементов управления: кнопок=${buttons.length}, селектов=${selects.length}`, 'info');
             
             if (selects.length > 0) {
+                // Если есть выпадающий список
                 const select = selects[0];
-                const optionElements = select.querySelectorAll('option');
-                addDebugLog(`Варианты в выпадающем списке: ${optionElements.length}`, 'info');
-                
                 for (let i = 1; i <= 4; i++) {
                     options[i] = {
                         is_locked: false,
@@ -775,10 +739,12 @@
                         name: categoryNames[i] || `Категория ${i}`
                     };
                 }
+                addDebugLog('Используем выпадающий список категорий', 'info');
             } else if (buttons.length >= 4) {
+                // Если есть отдельные кнопки для каждой категории
                 for (let i = 1; i <= 4; i++) {
                     const button = buttons[i-1];
-                    const isLocked = button.disabled || button.style.display === 'none' || 
+                    const isLocked = button.disabled || 
                                     button.classList.contains('disabled') ||
                                     button.textContent.includes('Locked') ||
                                     button.textContent.includes('Заблокировано');
@@ -793,6 +759,7 @@
                     addDebugLog(`Категория ${i} (${categoryNames[i]}): ${isLocked ? 'ЗАБЛОКИРОВАНА' : 'ДОСТУПНА'}`, isLocked ? 'warning' : 'success');
                 }
             } else {
+                // Если не удалось определить, считаем все доступными
                 for (let i = 1; i <= 4; i++) {
                     options[i] = {
                         is_locked: false,
@@ -888,7 +855,9 @@
                         
                         addDebugLog(`✅ Создан отряд для "${village.name}" -> ${village.options[cat].name}`, 'success');
                         Object.keys(squad).forEach(unit => {
-                            addDebugLog(`  ${getUnitName(unit)}: ${squad[unit]}`, 'info');
+                            if (squad[unit] > 0) {
+                                addDebugLog(`  ${getUnitName(unit)}: ${squad[unit]}`, 'info');
+                            }
                         });
                         
                         subtractSquadFromAvailable(availableUnits, squad);
@@ -916,7 +885,12 @@
         
         addDebugLog(`Категория ${categoryNames[category]}: требуется грузоподъемность ${requiredCapacity}`, 'info');
         
-        const enabledUnits = worldUnits.filter(unit => troopTypesEnabled[unit.id]);
+        const enabledUnits = worldUnits.filter(unit => troopTypesEnabled[unit.id] && availableUnits[unit.id] > 0);
+        if (enabledUnits.length === 0) {
+            addDebugLog('❌ Нет доступных выбранных типов войск', 'error');
+            return null;
+        }
+        
         const unitOrder = prioritiseHighCat ? 
             enabledUnits.sort((a, b) => b.capacity - a.capacity) :
             enabledUnits.sort((a, b) => a.capacity - b.capacity);
@@ -1041,6 +1015,7 @@
             addDebugLog(`Поиск элементов управления для категории: ${squad.category_name}`, 'info');
             
             if (selects.length > 0) {
+                // Используем выпадающий список
                 const select = selects[0];
                 select.value = squad.option_id;
                 addDebugLog(`Установлен выбор категории: ${squad.category_name}`, 'success');
@@ -1055,6 +1030,7 @@
                     return false;
                 }
             } else if (buttons.length >= 4) {
+                // Используем отдельные кнопки для каждой категории
                 const buttonIndex = squad.option_id - 1;
                 if (buttonIndex < buttons.length) {
                     const button = buttons[buttonIndex];
