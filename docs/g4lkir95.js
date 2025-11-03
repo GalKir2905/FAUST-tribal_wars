@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         FAUST Tribal Wars Mass Scavenging v4.9
+// @name         FAUST Tribal Wars Mass Scavenging v4.9.1
 // @namespace    http://tampermonkey.net/
 // @version      4.9
 // @description  Массовый сбор ресурсов с учетом времени возвращения
@@ -2014,7 +2014,7 @@
         panel.className = 'g4lkir95-panel';
         panel.innerHTML = `
             <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
-            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.9</div>
+            <div class="g4lkir95-header">🚀 G4lKir95 Mass Scavenging v4.9.1</div>
             ${createSettingsInterface()}
 
             <div class="g4lkir95-section">
@@ -2109,7 +2109,7 @@
 
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
-        console.log('G4lKir95: Initializing v4.9 with improved interface detection...');
+        console.log('G4lKir95: Initializing v4.9.1 with improved interface detection...');
         
         // Проверяем, что мы на правильной странице
         if (window.location.href.indexOf('mode=scavenge_mass') === -1) {
@@ -2124,8 +2124,8 @@
         loadSophieSettings();
         addLaunchButton();
         setTimeout(createInterface, 500);
-        addDebugLog('G4lKir95 Mass Scavenging v4.9 активирован! Улучшенный поиск интерфейса.', 'success');
-        showNotification('G4lKir95 Mass Scavenging v4.9 активирован!', 'success');
+        addDebugLog('G4lKir95 Mass Scavenging v4.9.1 активирован! Улучшенный поиск интерфейса.', 'success');
+        showNotification('G4lKir95 Mass Scavenging v4.9.1 активирован!', 'success');
     }
 
     if (document.readyState === 'loading') {
