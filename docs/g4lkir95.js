@@ -41,19 +41,118 @@ if (typeof window.vLog === 'undefined') {
     window.vLog = function() {
         if (!DEBUG_VERBOSE) return;
         try { console.log.apply(console, arguments); } catch (e) {}
+        try { uiLogAppend(arguments); } catch (e) {}
     };
 }
 if (typeof window.vGroup === 'undefined') {
     window.vGroup = function(title) {
         if (!DEBUG_VERBOSE) return;
         try { console.groupCollapsed(title); } catch (e) {}
+        try { uiLogGroup(title); } catch (e) {}
     };
 }
 if (typeof window.vGroupEnd === 'undefined') {
     window.vGroupEnd = function() {
         if (!DEBUG_VERBOSE) return;
         try { console.groupEnd(); } catch (e) {}
+        try { uiLogGroupEnd(); } catch (e) {}
     };
+}
+
+// ===== UI LOG PANEL =====
+if (typeof window.UILOG_ENABLED === 'undefined') {
+    var UILOG_ENABLED = true;
+}
+if (typeof window.UILOG_PAUSED === 'undefined') {
+    var UILOG_PAUSED = false;
+}
+if (typeof window.UILOG_GROUP_DEPTH === 'undefined') {
+    var UILOG_GROUP_DEPTH = 0;
+}
+
+function uiLogSafeStringify(obj) {
+    try {
+        const seen = new WeakSet();
+        return JSON.stringify(obj, function(key, value) {
+            if (typeof value === 'object' && value !== null) {
+                if (seen.has(value)) return '[Circular]';
+                seen.add(value);
+            }
+            return value;
+        });
+    } catch (e) {
+        try { return String(obj); } catch (e2) { return '[Unserializable]'; }
+    }
+}
+
+function uiLogEnsurePanel() {
+    if (document.getElementById('massScavengeLogPanel')) return;
+    const css = `
+<style>
+#massScavengeLogPanel { position: fixed; bottom: 8px; right: 8px; width: 520px; max-height: 40vh; background: ${typeof backgroundColor!== 'undefined'? backgroundColor : '#202225'}; border: 1px solid ${typeof borderColor!=='undefined'? borderColor : '#3e4147'}; z-index: 50; display:none; }
+#massScavengeLogHeader { background: ${typeof headerColor!=='undefined'? headerColor : '#202225'}; color: ${typeof titleColor!=='undefined'? titleColor : '#ffffdf'}; padding: 4px 6px; display:flex; align-items:center; justify-content: space-between; font-size: 12px; }
+#massScavengeLogControls button { margin-left: 6px; }
+#massScavengeLogBody { font-family: monospace; font-size: 11px; color: ${typeof titleColor!=='undefined'? titleColor : '#ffffdf'}; background: ${typeof backgroundColor!== 'undefined'? backgroundColor : '#202225'}; padding: 6px; overflow: auto; max-height: 33vh; }
+.ui-log-line { white-space: pre-wrap; word-break: break-word; }
+</style>`;
+    $("body").append(css + `
+<div id="massScavengeLogPanel" class="ui-widget-content">
+  <div id="massScavengeLogHeader">
+    <div>Подробные логи</div>
+    <div id="massScavengeLogControls">
+      <button class="btn btnSophie" id="logPauseBtn">Пауза</button>
+      <button class="btn btnSophie" id="logClearBtn">Очистить</button>
+      <button class="btn btnSophie" id="logCloseBtn">Скрыть</button>
+    </div>
+  </div>
+  <div id="massScavengeLogBody"></div>
+  </div>`);
+    $('#logPauseBtn').on('click', function(){ UILOG_PAUSED = !UILOG_PAUSED; $(this).text(UILOG_PAUSED? 'Продолжить' : 'Пауза'); });
+    $('#logClearBtn').on('click', function(){ $('#massScavengeLogBody').empty(); });
+    $('#logCloseBtn').on('click', function(){ $('#massScavengeLogPanel').hide(); });
+}
+
+function uiLogToggle(show) {
+    uiLogEnsurePanel();
+    if (typeof show === 'boolean') {
+        if (show) $('#massScavengeLogPanel').show(); else $('#massScavengeLogPanel').hide();
+        return;
+    }
+    $('#massScavengeLogPanel').toggle();
+}
+
+function uiLogAppend(argsLike) {
+    if (!UILOG_ENABLED || UILOG_PAUSED) return;
+    uiLogEnsurePanel();
+    try {
+        const arr = Array.prototype.slice.call(argsLike);
+        const ts = new Date();
+        const t = `${ts.getHours().toString().padStart(2,'0')}:${ts.getMinutes().toString().padStart(2,'0')}:${ts.getSeconds().toString().padStart(2,'0')}`;
+        const indent = '  '.repeat(Math.max(0, UILOG_GROUP_DEPTH));
+        const pieces = arr.map(x => {
+            if (typeof x === 'string') return x;
+            return uiLogSafeStringify(x);
+        });
+        const line = `${t} ${indent}${pieces.join(' ')}`;
+        const $body = $('#massScavengeLogBody');
+        const el = document.createElement('div');
+        el.className = 'ui-log-line';
+        el.textContent = line;
+        $body.append(el);
+        $body.scrollTop($body[0].scrollHeight);
+    } catch (e) {}
+}
+
+function uiLogGroup(title) {
+    if (!UILOG_ENABLED) return;
+    uiLogAppend([`▼ ${title}`]);
+    UILOG_GROUP_DEPTH++;
+}
+
+function uiLogGroupEnd() {
+    if (!UILOG_ENABLED) return;
+    UILOG_GROUP_DEPTH = Math.max(0, UILOG_GROUP_DEPTH - 1);
+    uiLogAppend(['▲ end']);
 }
 
 if (game_data.locale == "ru_RU") {
@@ -735,6 +834,7 @@ html = `
 <button class="btn" id = "x" onclick="closeWindow('massScavengeSophie')">
             X
         </button>
+        <button class="btn btnSophie" id="toggleLogUIPanelBtn" style="position:absolute; right:60px; top:0px; width:60px; height:30px;">Логи</button>
     <table id="massScavengeSophieTable" class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}">
         <tr>
             <td colspan="10" id="massScavengeSophieTitle" style="text-align:center; width:auto; background-color:${headerColor}">
@@ -924,6 +1024,10 @@ if (is_mobile == false) {
     $("#massScavengeSophie").draggable();
 
 }
+
+// Инициализация UI лог-панели и кнопки
+uiLogEnsurePanel();
+$("#toggleLogUIPanelBtn").on('click', function(){ uiLogToggle(); });
 
 $("#offDisplay")[0].innerText = fancyTimeFormat(runTimes.off * 3600);
 $("#defDisplay")[0].innerText = fancyTimeFormat(runTimes.def * 3600);
