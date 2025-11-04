@@ -1,4 +1,4 @@
-//mass scavenging by Sophie "Shinko to Kuma"
+
 serverTimeTemp = $("#serverDate")[0].innerText + " " + $("#serverTime")[0].innerText;
 serverTime = serverTimeTemp.match(/^([0][1-9]|[12][0-9]|3[01])[\/\-]([0][1-9]|1[012])[\/\-](\d{4})( (0?[0-9]|[1][0-9]|[2][0-3])[:]([0-5][0-9])([:]([0-5][0-9]))?)?$/);
 serverDate = Date.parse(serverTime[3] + "/" + serverTime[2] + "/" + serverTime[1] + serverTime[4]);
@@ -415,7 +415,7 @@ var uiTheme = localStorage.getItem('uiTheme');
 if (uiTheme) {
     colors = uiTheme;
 } else {
-    colors = 'modernDark';
+    colors = 'tribWars';
     localStorage.setItem('uiTheme', colors);
 }
 
@@ -512,6 +512,36 @@ else {
             width: 30px;
             height: 30px;
         }
+        </style>`
+    }
+    else if (colors == 'tribWars') {
+        // TribWars-like style (based on trib_wars.js styles)
+        var colors = {
+            "backgroundColor": "#2c3e50",
+            "borderColor": "#34495e",
+            "headerColor": "#34495e",
+            "titleColor": "#ecf0f1"
+        };
+        var backgroundColor = colors.backgroundColor;
+        var borderColor = colors.borderColor;
+        var headerColor = colors.headerColor;
+        var titleColor = colors.titleColor;
+        cssClassesSophie = `
+        <style>
+        .compact * { font-size: 90% !important; }
+        .compact table.vis td { padding: 2px !important; }
+        .compact input, .compact textarea, .compact select { padding: 2px 4px !important; }
+        .sophRowA { background-color: #2c3e50; color: #ecf0f1; }
+        .sophRowB { background-color: #2c3e50; color: #ecf0f1; }
+        .sophHeader { background-color: #34495e; font-weight: bold; color: #ecf0f1; }
+        .btnSophie { background: #e74c3c; color: #ffffff; border: none; }
+        .btnSophie:hover { background: #c0392b; }
+        .btn-pp { background: #27ae60; color: #ffffff; }
+        .btn-pp:hover { background: #219a52; }
+        #x { position: absolute; background: #e74c3c; color: white; top: 0px; right: 0px; width: 30px; height: 30px; border: none; }
+        #cog { position: absolute; background: #34495e; color: white; top: 0px; right: 30px; width: 30px; height: 30px; border: none; }
+        #massScavengeSophie { border: 2px solid #34495e; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        #massScavengeSophieTable { border-radius: 6px; }
         </style>`
     }
     else if (colors == 'modernDark') {
@@ -926,6 +956,7 @@ html = `
                     <div>
                         <label style="color:${titleColor}; font-size:11px; margin-right:4px;">Тема</label>
                         <select id="themeSelect" style="font-size:11px; background-color:${backgroundColor}; color:${titleColor}; border:1px solid ${borderColor};">
+                            <option value="tribWars">TribWars</option>
                             <option value="modernDark">Modern Dark</option>
                             <option value="TW">TW</option>
                             <option value="minimalistGray">Minimal Gray</option>
@@ -1103,7 +1134,7 @@ html = `
 
     <div style="text-align:center;">
         <p style="margin:2px; font-size:11px;">
-            <font color="${titleColor}">${langShinko[6]} </font><a href="https://shinko-to-kuma.my-free.website/" style="text-shadow:-1px -1px 0 ${titleColor},1px -1px 0 ${titleColor},-1px 1px 0 ${titleColor},1px 1px 0 ${titleColor}; font-size:11px;" title="Sophie profile" target="_blank">Sophie "Shinko to Kuma"</a>
+            <font color="${titleColor}">${langShinko[6]} </font><span style="text-shadow:-1px -1px 0 ${titleColor},1px -1px 0 ${titleColor},-1px 1px 0 ${titleColor},1px 1px 0 ${titleColor}; font-size:11px;">G4lKir95</span>
         </p>
     </div>
 </div>
