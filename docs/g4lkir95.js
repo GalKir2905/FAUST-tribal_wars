@@ -410,14 +410,8 @@ var time = {
     'def': 0
 };
 
-// THEME: load user-selected theme
-var uiTheme = localStorage.getItem('uiTheme');
-if (uiTheme) {
-    colors = uiTheme;
-} else {
-    colors = 'tribWars';
-    localStorage.setItem('uiTheme', colors);
-}
+// THEME: fixed TribWars theme (no theme selector)
+colors = 'tribWars';
 
 //colors for UI
 if (typeof colors == 'undefined') {
@@ -542,6 +536,16 @@ else {
         #cog { position: absolute; background: #34495e; color: white; top: 0px; right: 30px; width: 30px; height: 30px; border: none; }
         #massScavengeGalkir95 { border: 2px solid #34495e; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         #massScavengeGalkir95Table { border-radius: 6px; }
+        /* Units grid */
+        .units-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .unit-item { background: #2c3e50; border: 1px solid #34495e; border-radius: 6px; padding: 8px; }
+        .unit-header { display: flex; align-items: center; gap: 8px; justify-content: flex-start; margin-bottom: 6px; }
+        .unit-checkbox { width: 16px; height: 16px; margin-left: auto; }
+        .unit-img { background: #202225; padding: 4px; border-radius: 3px; }
+        .unit-name { font-size: 11px; color: #ecf0f1; font-weight: bold; text-transform: capitalize; }
+        .unit-controls { display: flex; flex-direction: column; gap: 5px; }
+        .unit-backup { width: 80px; font-size: 11px; padding: 4px; text-align: center; background: #2c3e50; color: #ecf0f1; border: 1px solid #7f8c8d; border-radius: 3px; }
+        .backup-label { font-size: 10px; color: #bdc3c7; }
         </style>`
     }
     else if (colors == 'modernDark') {
@@ -951,24 +955,10 @@ html = `
             </td>
         </tr>
         <tr>
-            <td colspan="10" style="background-color:${backgroundColor}; padding:4px;">
-                <div style="display:flex; gap:6px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
-                    <div>
-                        <label style="color:${titleColor}; font-size:11px; margin-right:4px;">Тема</label>
-                        <select id="themeSelect" style="font-size:11px; background-color:${backgroundColor}; color:${titleColor}; border:1px solid ${borderColor};">
-                            <option value="tribWars">TribWars</option>
-                            <option value="modernDark">Modern Dark</option>
-                            <option value="TW">TW</option>
-                            <option value="minimalistGray">Minimal Gray</option>
-                            <option value="pink">Pink</option>
-                            <option value="swedish">Swedish</option>
-                            <option value="standard">Standard</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label style="color:${titleColor}; font-size:11px; margin-right:4px;">Компактный режим</label>
-                        <input type="checkbox" id="compactToggle" />
-                    </div>
+            <td colspan="10" style="background-color:${backgroundColor}; padding:6px;">
+                <div style="display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap;">
+                    <label for="compactToggle" style="color:${titleColor}; font-size:11px;">Компактный режим</label>
+                    <input type="checkbox" id="compactToggle" />
                 </div>
             </td>
         </tr>
@@ -981,7 +971,10 @@ html = `
                 </h5>
             </td>
         </tr>
-        <tr id="imgRow">
+        <tr>
+            <td colspan="10" style="background-color:${backgroundColor}; padding: 4px;">
+                <div id="unitsGrid" class="units-grid"></div>
+            </td>
         </tr>
     </table>
     
@@ -1150,17 +1143,7 @@ if (is_mobile == false) {
 uiLogEnsurePanel();
 $("#toggleLogUIPanelBtn").on('click', function(){ uiLogToggle(); });
 
-// Theme select & compact mode handlers
-try {
-    var savedTheme = localStorage.getItem('uiTheme') || 'modernDark';
-    $('#themeSelect').val(savedTheme);
-    $('#themeSelect').on('change', function(){
-        var val = $(this).val();
-        localStorage.setItem('uiTheme', val);
-        window.location.reload();
-    });
-} catch(e) {}
-
+// Compact mode handler
 try {
     var compactSaved = localStorage.getItem('compactMode') === 'true';
     if (compactSaved) { $('#massScavengeGalkir95').addClass('compact'); }
@@ -1239,33 +1222,20 @@ $("#timeSelectorHours")[0].addEventListener("input", function () {
 
 //create checkboxes and add them to the UI
 for (var i = 0; i < sendOrder.length; i++) {
-    $("#imgRow").eq(0).append(`<td align="center" style="background-color:${backgroundColor}">
-    <table class="vis" border="1" style="width: 80px">
-    <tbody>    
-        <tr>
-            <td style="text-align:center;background-color:${headerColor};padding: 2px;">
-                <img src="https://dsen.innogamescdn.com/asset/cf2959e7/graphic/unit/unit_${sendOrder[i]}.png" title="${sendOrder[i]}" alt="" style="height:20px;">
-            </td>
-        </tr>
-        <tr>
-            <td align="center" style="background-color:${backgroundColor};padding: 1px;">
-                <input type="checkbox" ID="${sendOrder[i]}" name="${sendOrder[i]}" style="transform:scale(0.8)">
-            </td>
-        </tr>
-        <tr>
-            <td style="text-align:center; background-color:#202225;padding: 1px;">
-                <font color="#ffffdf" style="font-size:9px">Оставить дома</font>
-            </td>
-        </tr>
-        <tr>
-            <td align="center" style="background-color:${backgroundColor};padding: 1px;">
-                <input type="text" ID="${sendOrder[i]}Backup" name="${sendOrder[i]}" value="${keepHome[sendOrder[i]]}" size="3" style="font-size:10px; width:30px">
-            </td>
-        </tr>
-    </tbody>  
-    </table>
-</td>`);
-    $("#imgRow").sortable({
+    $("#unitsGrid").eq(0).append(`
+    <div class="unit-item">
+        <div class="unit-header">
+            <img class="unit-img" src="https://dsen.innogamescdn.com/asset/cf2959e7/graphic/unit/unit_${sendOrder[i]}.png" title="${sendOrder[i]}" alt="" style="height:20px;">
+            <span class="unit-name">${sendOrder[i]}</span>
+            <input type="checkbox" class="unit-checkbox" ID="${sendOrder[i]}" name="${sendOrder[i]}">
+        </div>
+        <div class="unit-controls">
+            <div class="backup-label">Оставить дома</div>
+            <input type="text" class="unit-backup" ID="${sendOrder[i]}Backup" name="${sendOrder[i]}" value="${keepHome[sendOrder[i]]}" size="3">
+        </div>
+    </div>`);
+    $("#unitsGrid").sortable({
+        items: ".unit-item",
         axis: "x",
         revert: 100,
         containment: "parent",
@@ -1368,8 +1338,8 @@ function readyToSend() {
     }
 
     sendOrder = [];
-    for (var k = 0; k < $("#imgRow :checkbox").length; k++) {
-        sendOrder.push($("#imgRow :checkbox")[k].name)
+    for (var k = 0; k < $("#unitsGrid :checkbox").length; k++) {
+        sendOrder.push($("#unitsGrid :checkbox")[k].name)
     }
     vLog("[readyToSend] Порядок юнитов после сортировки (источник '#imgRow :checkbox[name]'):", JSON.parse(JSON.stringify(sendOrder)));
     vLog(`[readyToSend] Режим приоритета: prioritiseHighCat=${prioritiseHighCat}`);
