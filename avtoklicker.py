@@ -46,6 +46,18 @@ def on_key_press(key):
     except Exception:
         pass
 
+def wait_for_f8():
+    print("Нажмите F8, чтобы начать запись.")
+    def _on_press(key):
+        try:
+            if key == keyboard.Key.f8:
+                return False
+        except Exception:
+            pass
+    listener = keyboard.Listener(on_press=_on_press)
+    listener.start()
+    listener.join()
+
 def record_sequence():
     global recording_started_at
     recording_events.clear()
@@ -157,6 +169,7 @@ def ask_params(default_interval=DEFAULT_INTERVAL_SECONDS, default_hours=DEFAULT_
         return default_interval, int(default_hours * 3600), None
 
 def main():
+    wait_for_f8()
     seq_duration = record_sequence()
     if seq_duration <= 0:
         print("Похоже, вы ничего не записали. Завершение.")
@@ -175,7 +188,7 @@ def main():
 
 if __name__ == "__main__":
     print("Подсказки:")
-    print("- После старта начнётся запись: двигайте и кликайте мышью.")
+    print("- Перед началом записи нажмите F8.")
     print("- Нажмите F9, чтобы закончить запись.")
     print("- Во время воспроизведения нажмите ESC, чтобы прервать.")
     main()
