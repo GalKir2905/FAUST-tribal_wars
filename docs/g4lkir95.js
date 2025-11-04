@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         FAUST Tribal Wars Mass Scavenging v5.1.0
+// @name         FAUST Tribal Wars Mass Scavenging v5.1.1
 // @namespace    http://tampermonkey.net/
-// @version      5.1.0
+// @version      5.1.1
 // @description  Массовый сбор ресурсов с синхронным временем возвращения
 // @author       G4lKir95 & Sophie
 // @match        https://*.tribalwars.com.ua/game.php*
@@ -14,17 +14,6 @@
 
 (function() {
     'use strict';
-
-    // Автоматическое перенаправление на страницу массового сбора
-    if (window.location.href.indexOf('mode=scavenge_mass') === -1 && 
-        window.location.href.indexOf('screen=place') !== -1) {
-        console.log('G4lKir95: Redirecting to mass scavenging page');
-        const gameServer = window.location.hostname;
-        const gamePhp = window.location.pathname;
-        const massUrl = `https://${gameServer}${gamePhp}?screen=place&mode=scavenge_mass`;
-        window.location.href = massUrl;
-        return;
-    }
 
     // ========== КОНФИГУРАЦИЯ ==========
     let repeatEnabled = false;
@@ -546,12 +535,10 @@
         for (const category of availableCategories) {
             if (remainingTroops <= 0) break;
             
-            const categoryTime = categoryTimes[category];
-            const squad = createSquadForTimeTarget(remainingUnits, categoryTime, targetTime);
+            const squad = createSquadForTimeTarget(remainingUnits, category, targetTime);
             
             if (squad && hasUnits(squad)) {
                 const squadTroops = Object.values(squad).reduce((sum, count) => sum + count, 0);
-                const squadCapacity = calculateTotalCapacity(squad);
                 const actualTime = calculateReturnTime(squad);
                 
                 // Обновляем оставшиеся войска
@@ -567,7 +554,7 @@
                     option_id: category,
                     category_name: village.options[category].name,
                     expected_time: actualTime,
-                    target_time: categoryTime,
+                    target_time: categoryTimes[category],
                     row: village.row
                 });
                 
@@ -607,17 +594,19 @@
         }
         
         // Логируем итоговое распределение по времени
-        const times = squads.map(s => s.expected_time);
-        const avgTime = times.reduce((sum, time) => sum + time, 0) / times.length;
-        const maxDiff = Math.max(...times) - Math.min(...times);
-        
-        addDebugLog(`  Итог: среднее время ${Math.round(avgTime)} мин, разброс ${maxDiff} мин`, 
-                   maxDiff <= 1 ? 'success' : 'warning');
+        if (squads.length > 0) {
+            const times = squads.map(s => s.expected_time);
+            const avgTime = times.reduce((sum, time) => sum + time, 0) / times.length;
+            const maxDiff = Math.max(...times) - Math.min(...times);
+            
+            addDebugLog(`  Итог: среднее время ${Math.round(avgTime)} мин, разброс ${maxDiff} мин`, 
+                       maxDiff <= 1 ? 'success' : 'warning');
+        }
         
         return squads;
     }
 
-    function createSquadForTimeTarget(availableUnits, categoryTime, targetTime) {
+    function createSquadForTimeTarget(availableUnits, category, targetTime) {
         const squad = {};
         const enabledUnits = worldUnits.filter(unit => troopTypesEnabled[unit.id] && availableUnits[unit.id] > 0);
         
@@ -625,7 +614,7 @@
         
         // Рассчитываем общее количество войск для этой категории
         const totalAvailable = Object.values(availableUnits).reduce((sum, count) => sum + count, 0);
-        const timeRatio = categoryTime / targetTime;
+        const timeRatio = categoryTimes[category] / targetTime;
         const targetTroops = Math.floor(totalAvailable * timeRatio);
         
         if (targetTroops <= 0) return null;
@@ -758,7 +747,7 @@
         return true;
     }
 
-    // ========== ПОИСК ДАННЫХ (остается без изменений) ==========
+    // ========== ПОИСК ДАННЫХ ==========
     function getImprovedVillageData() {
         addDebugLog('Поиск данных о деревнях...', 'info');
         const villages = [];
@@ -775,7 +764,7 @@
                     if (!villageInfo) continue;
                     
                     const units = getRealUnitsFromRow(row, villageInfo.name);
-                    const options = getCategoryOptions(row);
+                    const options = getCategoryOptions();
                     
                     villages.push({
                         id: villageInfo.id,
@@ -805,8 +794,21 @@
 
     function findVillageRows() {
         const rows = [];
-        const selectors = ['tr', '.village-row', '.row', 'div.village', '[class*="village"]'];
         
+        // Ищем таблицы с деревнями
+        const tables = document.querySelectorAll('table');
+        
+        for (let table of tables) {
+            const tableRows = table.querySelectorAll('tr');
+            for (let row of tableRows) {
+                if (isValidVillageRow(row) && !rows.includes(row)) {
+                    rows.push(row);
+                }
+            }
+        }
+        
+        // Также ищем отдельные строки
+        const selectors = ['tr', '.village-row', '.row'];
         for (const selector of selectors) {
             const elements = document.querySelectorAll(selector);
             for (let element of elements) {
@@ -822,7 +824,14 @@
     function isValidVillageRow(element) {
         if (!element || !element.textContent) return false;
         const text = element.textContent;
-        return text.match(/\(\d+\|\d+\)/) && hasScavengeControls(element);
+        
+        // Должны быть координаты деревни
+        if (!text.match(/\(\d+\|\d+\)/)) return false;
+        
+        // Должны быть элементы управления сбором
+        if (!hasScavengeControls(element)) return false;
+        
+        return true;
     }
 
     function hasScavengeControls(element) {
@@ -917,7 +926,7 @@
         });
     }
 
-    function getCategoryOptions(row) {
+    function getCategoryOptions() {
         const options = {};
         for (let i = 1; i <= 4; i++) {
             options[i] = {
@@ -928,7 +937,7 @@
         return options;
     }
 
-    // ========== ОТПРАВКА (остается без изменений) ==========
+    // ========== ОТПРАВКА ==========
     function sendImprovedScavengingSquads(squads) {
         if (squads.length === 0) return;
         addDebugLog(`Начинаем отправку ${squads.length} отрядов...`, 'info');
@@ -1108,7 +1117,6 @@
         `;
     }
 
-    // Остальные функции интерфейса остаются без изменений
     function createUnitsInterface() {
         const container = document.getElementById('unitsContainer');
         if (!container) return;
@@ -1237,7 +1245,7 @@
         panel.className = 'g4lkir95-panel';
         panel.innerHTML = `
             <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
-            <div class="g4lkir95-header">🚀 G4lKir95 Time-Synced Scavenging v5.1.0</div>
+            <div class="g4lkir95-header">🚀 G4lKir95 Time-Synced Scavenging v5.1.1</div>
             ${createSettingsInterface()}
 
             <div class="g4lkir95-section">
@@ -1332,21 +1340,45 @@
 
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
-        console.log('G4lKir95: Initializing v5.1.0 with time synchronization...');
+        console.log('G4lKir95: Initializing v5.1.1 with time synchronization...');
         
-        if (window.location.href.indexOf('mode=scavenge_mass') === -1) {
-            addDebugLog('Не на странице массового сбора', 'warning');
-            return;
-        }
-        
+        // УБРАН АВТОМАТИЧЕСКИЙ ПЕРЕХОД - теперь скрипт работает на любой странице
         const styleSheet = document.createElement('style');
         styleSheet.textContent = styles;
         document.head.appendChild(styleSheet);
         loadSophieSettings();
         addLaunchButton();
-        setTimeout(createInterface, 500);
-        addDebugLog('G4lKir95 Time-Synced Scavenging v5.1.0 активирован!', 'success');
-        showNotification('Скрипт синхронизации времени активирован!', 'success');
+        
+        // Автоматически открываем панель если мы на странице массового сбора
+        if (window.location.href.indexOf('mode=scavenge_mass') !== -1) {
+            setTimeout(createInterface, 1000);
+            addDebugLog('G4lKir95 Time-Synced Scavenging v5.1.1 активирован на странице массового сбора!', 'success');
+            showNotification('Скрипт синхронизации времени активирован!', 'success');
+        } else {
+            addDebugLog('G4lKir95 Time-Synced Scavenging v5.1.1 активирован! Нажмите кнопку 🚀 для открытия панели.', 'success');
+            showNotification('Нажмите кнопку 🚀 для открытия панели массового сбора', 'info');
+        }
+    }
+
+    // Функция для ручного перехода на страницу массового сбора
+    function goToMassScavenging() {
+        const gameServer = window.location.hostname;
+        const gamePhp = window.location.pathname;
+        const massUrl = `https://${gameServer}${gamePhp}?screen=place&mode=scavenge_mass`;
+        window.location.href = massUrl;
+    }
+
+    // Добавляем кнопку для перехода если не на нужной странице
+    function addNavigationButton() {
+        if (window.location.href.indexOf('mode=scavenge_mass') === -1) {
+            const navBtn = document.createElement('button');
+            navBtn.className = 'g4lkir95-launch-btn';
+            navBtn.style.top = '50px';
+            navBtn.innerHTML = '📊 Перейти к сбору';
+            navBtn.title = 'Перейти на страницу массового сбора';
+            navBtn.addEventListener('click', goToMassScavenging);
+            document.body.appendChild(navBtn);
+        }
     }
 
     if (document.readyState === 'loading') {

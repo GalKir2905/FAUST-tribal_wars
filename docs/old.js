@@ -1,652 +1,1498 @@
-// ==UserScript==
-// @name         Resource Search Shinka
-// @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  Enhanced resource search with Russian localization
-// @author       Your Name
-// @match        https://*/*
-// @grant        GM_xmlhttpRequest
-// @grant        GM_setValue
-// @grant        GM_getValue
-// @connect      *
-// @require      https://code.jquery.com/jquery-3.6.0.min.js
-// ==/UserScript==
+//mass scavenging by Sophie "Shinko to Kuma"
+serverTimeTemp = $("#serverDate")[0].innerText + " " + $("#serverTime")[0].innerText;
+serverTime = serverTimeTemp.match(/^([0][1-9]|[12][0-9]|3[01])[\/\-]([0][1-9]|1[012])[\/\-](\d{4})( (0?[0-9]|[1][0-9]|[2][0-3])[:]([0-5][0-9])([:]([0-5][0-9]))?)?$/);
+serverDate = Date.parse(serverTime[3] + "/" + serverTime[2] + "/" + serverTime[1] + serverTime[4]);
+var is_mobile = !!navigator.userAgent.match(/iphone|android|blackberry/ig) || false;
+var scavengeInfo;
+var tempElementSelection="";
 
-(function() {
-    'use strict';
+//relocate to mass scavenging page
+if (window.location.href.indexOf('screen=place&mode=scavenge_mass') < 0) {
+    //relocate
+    window.location.assign(game_data.link_base_pure + "place&mode=scavenge_mass");
+}
 
-    // Russian localization
-    const localization = {
-        // Основные элементы интерфейса
-        "search_placeholder": "Поиск ресурсов...",
-        "search_button": "Поиск",
-        "clear_button": "Очистить",
-        "loading": "Загрузка...",
-        "no_results": "Результаты не найдены",
-        "error_loading": "Ошибка загрузки данных",
-        "resource_search": "Поиск ресурсов",
-        "search_description": "Расширенный поиск ресурсов с фильтрацией",
+$("#massScavengeSophie").remove();
+//set global variables
 
-        // Фильтры и категории
-        "filter_all": "Все ресурсы",
-        "filter_images": "Изображения",
-        "filter_documents": "Документы",
-        "filter_videos": "Видео",
-        "filter_audio": "Аудио",
-        "filter_other": "Другое",
+if (typeof version == 'undefined') {
+    version = "new";
+}
 
-        // Информация о ресурсах
-        "file_name": "Имя файла",
-        "file_size": "Размер",
-        "file_type": "Тип файла",
-        "date_modified": "Дата изменения",
-        "download": "Скачать",
-        "preview": "Просмотр",
+//set translations
+var langShinko = [
+    "Массовая очистка",
+    "Выберите типы юнитов/ПОРЯДОК для очистки (перетащите юниты для изменения порядка)",
+    "Выберите категории для использования",
+    "Когда вы хотите, чтобы ваши отряды вернулись (приблизительно)?",
+    "Время выполнения здесь",
+    "Рассчитать время для каждой страницы",
+    "Автор: ",
+    "Массовая очистка: отправка по 50 деревень",
+    "Запустить группу "
+];
 
-        // Пагинация
-        "previous_page": "Предыдущая",
-        "next_page": "Следующая",
-        "page": "Страница",
-        "of": "из",
+if (game_data.locale == "ru_RU") {
+    //russian server
+    langShinko = [
+        "Массовая очистка",
+        "Выберите типы юнитов/ПОРЯДОК для очистки (перетащите юниты для изменения порядка)",
+        "Выберите категории для использования",
+        "Когда вы хотите, чтобы ваши отряды вернулись (приблизительно)?",
+        "Время выполнения здесь",
+        "Рассчитать время для каждой страницы",
+        "Автор: ",
+        "Массовая очистка: отправка по 50 деревень",
+        "Запустить группу "
+    ];
+}
+if (game_data.locale == "ro_RO") {
+    //romanian server
+    langShinko = [
+        "Curatare in masa",
+        "Selecteaza tipul unitatii/ORDONEAZA sa curete cu (trage unitatea pentru a ordona)",
+        "Selecteaza categoria",
+        "Cand vrei sa se intoarca trupele de la curatare (aproximativ)",
+        "Durata aici",
+        "Calculeaza durata pentru fiecare pagina",
+        "Creator: ",
+        "Cueatare in masa: trimite pe 50 de sate",
+        "Lanseaza grup "
+    ];
+}
+if (game_data.locale == "ar_AE") {
+    //arabic server
+    langShinko = [
+        "РЁВ§Р©вЂћРЁВ§РЁС”РЁВ§РЁВ±РЁВ§РЁР„",
+        "РЁВ§РЁВ®РЁР„РЁВ§РЁВ± РЁВ§Р©вЂћР©в‚¬РЁВРЁР‡РЁВ§РЁР„ РЁВ§Р©вЂћР©вЂ¦РЁС–РЁР„РЁВ®РЁР‡Р©вЂ¦РЁВ© Р©РѓР©вЂ° РЁВ§Р©вЂћРЁВ§РЁС”РЁВ§РЁВ±РЁВ§РЁР„",
+        "РЁВ§РЁВ®РЁР„РЁВ§РЁВ± РЁВ§Р©вЂ Р©в‚¬РЁВ§РЁв„–   РЁВ§Р©вЂћРЁВ§РЁС”РЁВ§РЁВ±РЁВ§РЁР„ РЁВ§Р©вЂћР©вЂ¦РЁС–РЁР„РЁВ®РЁР‡Р©вЂ¦РЁВ© ",
+        " Р©вЂ¦РЁВ§ РЁВ§Р©вЂћР©вЂ¦РЁР‡Р©вЂЎ РЁВ§Р©вЂћР©вЂ¦РЁР‡Р©вЂЎ РЁВ§Р©вЂћРЁР†Р©вЂ¦Р©вЂ Р©Р‰Р©вЂЎ РЁВ§Р©вЂћР©вЂ¦РЁВ±РЁВ§РЁР‡ РЁВ§РЁВ±РЁС–РЁВ§Р©вЂћ РЁВ§Р©вЂћРЁВ§РЁС”РЁВ§РЁВ±РЁВ§РЁР„ РЁРЃР©вЂЎРЁВ§",
+        "РЁВ¶РЁв„– РЁВ§РЁВ§Р©вЂћР©вЂ¦РЁР‡Р©вЂЎ Р©вЂЎР©вЂ РЁВ§",
+        "РЁВРЁС–РЁВ§РЁРЃ РЁВ§Р©вЂћР©вЂ¦РЁР‡Р©вЂЎ Р©вЂћР©С“Р©вЂћ РЁВµР©РѓРЁВР©вЂЎ ",
+        "Creator: ",
+        "РЁВ§Р©вЂћРЁВ§РЁС”РЁВ§РЁВ±РЁВ§РЁР„ : РЁР„РЁВ±РЁС–Р©вЂћ Р©вЂћР©С“Р©вЂћ 50 Р©вЂљРЁВ±Р©Р‰Р©вЂЎ РЁв„–Р©вЂћР©вЂ° РЁВРЁР‡Р©вЂ° ",
+        " РЁР„РЁТ‘РЁС”Р©Р‰Р©вЂћ РЁВ§Р©вЂћР©вЂ¦РЁВ¬Р©вЂ¦Р©в‚¬РЁв„–РЁВ© "
+    ];
+}
+if (game_data.locale == "el_GR") {
+    //greek server
+    langShinko = [
+        "РћСљРћВ±РћВ¶Рћв„–РћС”РћВ® РџС“РћВ¬РџРѓРџвЂ°РџС“РћВ·",
+        "РћвЂўРџР‚Рћв„–РћВ»РћВРћС•РџвЂћРћВµ РџвЂћРћв„–РџвЂљ РћСРћС—РћР…РћВ¬РћТ‘РћВµРџвЂљ РћСРћВµ РџвЂћРћв„–РџвЂљ РћС—РџР‚РћС—РћР‡РћВµРџвЂћРћВµ РћС‘РћВ± РћС”РћВ¬РћР…РћВµРџвЂћРћВµ РџС“РћВ¬РџРѓРџвЂ°РџС“РћВ·",
+        "РћвЂўРџР‚Рћв„–РћВ»РћВРћС•РџвЂћРћВµ РћВµРџР‚РћР‡РџР‚РћВµРћТ‘РћВ± РџС“РћВ¬РџРѓРџвЂ°РџС“РћВ·РџвЂљ РџР‚РћС—РџвЂ¦ РћС‘РћВ± РџвЂЎРџРѓРћВ·РџС“Рћв„–РћСРћС—РџР‚РћС—Рћв„–РћВ·РћС‘РћС—РџРЊРћР…",
+        "РћВ§РџРѓРџРЉРћР…РћС—РџвЂљ РћР€РћВ¬РџРѓРџвЂ°РџС“РћВ·РџвЂљ (РћРЏРџРѓРћВµРџвЂљ.РћвЂєРћВµРџР‚РџвЂћРћВ¬)",
+        "РћВ§РџРѓРџРЉРћР…РћС—РџвЂљ",
+        "РћТђРџР‚РћС—РћВ»РџРЉРћС–Рћв„–РџС“РћВµ РџвЂЎРџРѓРџРЉРћР…РћС—РџвЂ¦РџвЂљ РџС“РћВ¬РџРѓРџвЂ°РџС“РћВ·РџвЂљ РћС–Рћв„–РћВ± РћС”РћВ¬РћС‘РћВµ РџС“РћВµРћВ»РћР‡РћТ‘РћВ±.",
+        "РћвЂќРћВ·РћСРћв„–РћС—РџвЂ¦РџРѓРћС–РџРЉРџвЂљ: ",
+        "РћСљРћВ±РћВ¶Рћв„–РћС”РћВ® РџС“РћВ¬РџРѓРџвЂ°РџС“РћВ·: РћвЂРџР‚РћС—РџС“РџвЂћРћС—РћВ»РћВ® РћВ±РћР…РћВ± 50 РџвЂЎРџвЂ°РџРѓРћв„–РћВ¬",
+        "РћвЂРџР‚РћС—РџС“РџвЂћРћС—РћВ»РћВ® РћС—РћСРћВ¬РћТ‘РћВ±РџвЂљ "
+    ];
+}
+if (game_data.locale == "nl_NL") {
+    //dutch server
+    langShinko = [
+        "Massa rooftochten",
+        "Kies welke troeptypes je wil mee roven, sleep om prioriteit te ordenen",
+        "Kies categorieР“В«n die je wil gebruiken",
+        "Wanneer wil je dat je rooftochten terug zijn?",
+        "Looptijd hier invullen",
+        "Bereken rooftochten voor iedere pagina",
+        "Scripter: ",
+        "Massa rooftochten: verstuur per 50 dorpen",
+        "Verstuur groep "
+    ];
+}
+if (game_data.locale == "it_IT") {
+    //Italian server
+    langShinko = [
+        "Rovistamento di massa",
+        "Seleziona i tipi da unitР“  con cui rovistare",
+        "Seleziona quali categorie utilizzare",
+        "Inserisci la durata voluta dei rovistamenti in ORE",
+        "Inserisci qui il tempo",
+        "Calcola tempi per tutte le pagine",
+        "Creatore: ",
+        "Rovistamento di massa: manda su 50 villaggi",
+        "Lancia gruppo"
+    ];
+}
 
-        // Сообщения
-        "searching": "Поиск...",
-        "results_found": "найдено результатов",
-        "select_file_type": "Выберите тип файла",
-        "all_file_types": "Все типы файлов",
+//loading settings
 
-        // Статусы
-        "success": "Успешно",
-        "warning": "Предупреждение",
-        "error": "Ошибка",
+// troop types
 
-        // Действия
-        "confirm": "Подтвердить",
-        "cancel": "Отмена",
-        "delete": "Удалить",
-        "edit": "Редактировать",
-        "save": "Сохранить",
-
-        // Настройки
-        "settings": "Настройки",
-        "language": "Язык",
-        "theme": "Тема",
-        "results_per_page": "Результатов на странице",
-
-        // Помощь
-        "help": "Помощь",
-        "about": "О программе",
-        "version": "Версия"
-    };
-
-    // Конфигурация
-    const config = {
-        resultsPerPage: 10,
-        apiEndpoint: 'https://api.example.com/search',
-        enablePreview: true,
-        maxFileSize: 100 * 1024 * 1024 // 100MB
-    };
-
-    // Состояние приложения
-    let state = {
-        currentPage: 1,
-        totalResults: 0,
-        currentQuery: '',
-        currentFilter: 'all',
-        isLoading: false,
-        searchResults: []
-    };
-
-    // Функция для получения локализованного текста
-    function getLocalizedText(key) {
-        return localization[key] || key;
-    }
-
-    // Функция для применения локализации
-    function applyLocalization() {
-        const elements = document.querySelectorAll('[data-i18n]');
-        elements.forEach(element => {
-            const key = element.getAttribute('data-i18n');
-            const localizedText = getLocalizedText(key);
-            
-            if (element.tagName === 'INPUT' && (element.type === 'text' || element.type === 'search')) {
-                element.placeholder = localizedText;
-            } else if (element.tagName === 'INPUT' && element.type === 'button') {
-                element.value = localizedText;
-            } else {
-                element.textContent = localizedText;
-            }
-        });
-    }
-
-    // Создание интерфейса поиска
-    function createSearchInterface() {
-        const searchContainer = document.createElement('div');
-        searchContainer.id = 'resource-search-shinka';
-        searchContainer.innerHTML = `
-            <div class="rss-container">
-                <div class="rss-header">
-                    <h2 data-i18n="resource_search">Resource Search</h2>
-                </div>
-                
-                <div class="rss-search-bar">
-                    <input type="search" id="rss-search-input" data-i18n="search_placeholder" placeholder="${getLocalizedText('search_placeholder')}" class="rss-search-input">
-                    <button id="rss-search-btn" data-i18n="search_button" class="rss-search-btn">${getLocalizedText('search_button')}</button>
-                    <button id="rss-clear-btn" data-i18n="clear_button" class="rss-clear-btn">${getLocalizedText('clear_button')}</button>
-                </div>
-
-                <div class="rss-filters">
-                    <select id="rss-type-filter" class="rss-filter-select">
-                        <option value="all" data-i18n="filter_all">${getLocalizedText('filter_all')}</option>
-                        <option value="image" data-i18n="filter_images">${getLocalizedText('filter_images')}</option>
-                        <option value="document" data-i18n="filter_documents">${getLocalizedText('filter_documents')}</option>
-                        <option value="video" data-i18n="filter_videos">${getLocalizedText('filter_videos')}</option>
-                        <option value="audio" data-i18n="filter_audio">${getLocalizedText('filter_audio')}</option>
-                        <option value="other" data-i18n="filter_other">${getLocalizedText('filter_other')}</option>
-                    </select>
-                </div>
-
-                <div class="rss-results-container">
-                    <div id="rss-loading" class="rss-loading hidden" data-i18n="loading">${getLocalizedText('loading')}</div>
-                    <div id="rss-results" class="rss-results"></div>
-                    <div id="rss-no-results" class="rss-no-results hidden" data-i18n="no_results">${getLocalizedText('no_results')}</div>
-                    <div id="rss-error" class="rss-error hidden" data-i18n="error_loading">${getLocalizedText('error_loading')}</div>
-                </div>
-
-                <div class="rss-pagination hidden">
-                    <button id="rss-prev-btn" class="rss-pagination-btn" data-i18n="previous_page">${getLocalizedText('previous_page')}</button>
-                    <span class="rss-page-info">
-                        <span data-i18n="page">${getLocalizedText('page')}</span> 
-                        <span id="rss-current-page">1</span> 
-                        <span data-i18n="of">${getLocalizedText('of')}</span> 
-                        <span id="rss-total-pages">1</span>
-                    </span>
-                    <button id="rss-next-btn" class="rss-pagination-btn" data-i18n="next_page">${getLocalizedText('next_page')}</button>
-                </div>
-            </div>
-        `;
-
-        // Стили
-        const styles = `
-            <style>
-                #resource-search-shinka {
-                    font-family: Arial, sans-serif;
-                    max-width: 1200px;
-                    margin: 20px auto;
-                    padding: 20px;
-                    background: #f5f5f5;
-                    border-radius: 10px;
-                    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                }
-
-                .rss-container {
-                    background: white;
-                    padding: 20px;
-                    border-radius: 8px;
-                }
-
-                .rss-header h2 {
-                    color: #333;
-                    margin-bottom: 20px;
-                    text-align: center;
-                }
-
-                .rss-search-bar {
-                    display: flex;
-                    gap: 10px;
-                    margin-bottom: 15px;
-                }
-
-                .rss-search-input {
-                    flex: 1;
-                    padding: 10px;
-                    border: 1px solid #ddd;
-                    border-radius: 5px;
-                    font-size: 14px;
-                }
-
-                .rss-search-btn, .rss-clear-btn {
-                    padding: 10px 20px;
-                    border: none;
-                    border-radius: 5px;
-                    cursor: pointer;
-                    font-size: 14px;
-                }
-
-                .rss-search-btn {
-                    background: #007cba;
-                    color: white;
-                }
-
-                .rss-search-btn:hover {
-                    background: #005a87;
-                }
-
-                .rss-clear-btn {
-                    background: #6c757d;
-                    color: white;
-                }
-
-                .rss-clear-btn:hover {
-                    background: #545b62;
-                }
-
-                .rss-filters {
-                    margin-bottom: 20px;
-                }
-
-                .rss-filter-select {
-                    padding: 8px 12px;
-                    border: 1px solid #ddd;
-                    border-radius: 5px;
-                    font-size: 14px;
-                }
-
-                .rss-results-container {
-                    min-height: 200px;
-                }
-
-                .rss-loading, .rss-no-results, .rss-error {
-                    text-align: center;
-                    padding: 40px;
-                    font-size: 16px;
-                    color: #666;
-                }
-
-                .rss-error {
-                    color: #dc3545;
-                }
-
-                .rss-results {
-                    display: grid;
-                    gap: 15px;
-                }
-
-                .rss-result-item {
-                    display: flex;
-                    align-items: center;
-                    padding: 15px;
-                    background: #f8f9fa;
-                    border: 1px solid #e9ecef;
-                    border-radius: 5px;
-                    transition: background-color 0.2s;
-                }
-
-                .rss-result-item:hover {
-                    background: #e9ecef;
-                }
-
-                .rss-file-icon {
-                    width: 40px;
-                    height: 40px;
-                    margin-right: 15px;
-                    background: #007cba;
-                    border-radius: 5px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: white;
-                    font-weight: bold;
-                }
-
-                .rss-file-info {
-                    flex: 1;
-                }
-
-                .rss-file-name {
-                    font-weight: bold;
-                    margin-bottom: 5px;
-                    color: #333;
-                }
-
-                .rss-file-meta {
-                    font-size: 12px;
-                    color: #666;
-                }
-
-                .rss-file-actions {
-                    display: flex;
-                    gap: 10px;
-                }
-
-                .rss-download-btn, .rss-preview-btn {
-                    padding: 6px 12px;
-                    border: none;
-                    border-radius: 3px;
-                    cursor: pointer;
-                    font-size: 12px;
-                }
-
-                .rss-download-btn {
-                    background: #28a745;
-                    color: white;
-                }
-
-                .rss-download-btn:hover {
-                    background: #218838;
-                }
-
-                .rss-preview-btn {
-                    background: #17a2b8;
-                    color: white;
-                }
-
-                .rss-preview-btn:hover {
-                    background: #138496;
-                }
-
-                .rss-pagination {
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    gap: 15px;
-                    margin-top: 20px;
-                    padding-top: 20px;
-                    border-top: 1px solid #ddd;
-                }
-
-                .rss-pagination-btn {
-                    padding: 8px 16px;
-                    border: 1px solid #ddd;
-                    background: white;
-                    border-radius: 5px;
-                    cursor: pointer;
-                }
-
-                .rss-pagination-btn:hover:not(:disabled) {
-                    background: #007cba;
-                    color: white;
-                }
-
-                .rss-pagination-btn:disabled {
-                    opacity: 0.5;
-                    cursor: not-allowed;
-                }
-
-                .rss-page-info {
-                    font-size: 14px;
-                    color: #666;
-                }
-
-                .hidden {
-                    display: none !important;
-                }
-            </style>
-        `;
-
-        document.head.insertAdjacentHTML('beforeend', styles);
-        document.body.insertAdjacentElement('afterbegin', searchContainer);
-
-        // Инициализация событий
-        initializeEvents();
-        applyLocalization();
-    }
-
-    // Инициализация событий
-    function initializeEvents() {
-        const searchInput = document.getElementById('rss-search-input');
-        const searchBtn = document.getElementById('rss-search-btn');
-        const clearBtn = document.getElementById('rss-clear-btn');
-        const typeFilter = document.getElementById('rss-type-filter');
-        const prevBtn = document.getElementById('rss-prev-btn');
-        const nextBtn = document.getElementById('rss-next-btn');
-
-        searchBtn.addEventListener('click', performSearch);
-        clearBtn.addEventListener('click', clearSearch);
-        
-        searchInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                performSearch();
-            }
-        });
-
-        typeFilter.addEventListener('change', () => {
-            state.currentFilter = typeFilter.value;
-            if (state.currentQuery) {
-                performSearch();
-            }
-        });
-
-        prevBtn.addEventListener('click', () => {
-            if (state.currentPage > 1) {
-                state.currentPage--;
-                performSearch();
-            }
-        });
-
-        nextBtn.addEventListener('click', () => {
-            const totalPages = Math.ceil(state.totalResults / config.resultsPerPage);
-            if (state.currentPage < totalPages) {
-                state.currentPage++;
-                performSearch();
-            }
-        });
-    }
-
-    // Выполнение поиска
-    function performSearch() {
-        const searchInput = document.getElementById('rss-search-input');
-        const query = searchInput.value.trim();
-
-        if (!query) {
-            showMessage('no_results');
-            return;
+if (localStorage.getItem("troopTypeEnabled") == null) {
+    console.log("No troopTypeEnabled found, making new one")
+    worldUnits = game_data.units;
+    var troopTypeEnabled = {}
+    for (var i = 0; i < worldUnits.length; i++) {
+        if (worldUnits[i] != "militia" && worldUnits[i] != "snob" && worldUnits[i] != "ram" && worldUnits[i] != "catapult" && worldUnits[i] != "spy" && worldUnits[i] != "knight") {
+            troopTypeEnabled[worldUnits[i]] = false
         }
+    };
+    localStorage.setItem("troopTypeEnabled", JSON.stringify(troopTypeEnabled));
+}
+else {
+    console.log("Getting which troop types are enabled from storage");
+    var troopTypeEnabled = JSON.parse(localStorage.getItem("troopTypeEnabled"));
+}
 
-        state.currentQuery = query;
-        state.currentPage = 1;
+// keepHome
 
-        showLoading();
-        executeSearch(query, state.currentFilter, state.currentPage);
+if (localStorage.getItem("keepHome") == null) {
+    console.log("No units set to keep home, creating")
+    var keepHome = {
+        "spear": 0,
+        "sword": 0,
+        "axe": 0,
+        "archer": 0,
+        "light": 0,
+        "marcher": 0,
+        "heavy": 0
     }
+    localStorage.setItem("keepHome", JSON.stringify(keepHome));
+}
+else {
+    console.log("Grabbing which units to keep home");
+    var keepHome = JSON.parse(localStorage.getItem("keepHome"));
+}
 
-    // Выполнение поискового запроса
-    function executeSearch(query, filter, page) {
-        state.isLoading = true;
+// categories enabled
 
-        // Имитация API запроса (замените на реальный API)
-        setTimeout(() => {
-            const mockResults = generateMockResults(query, filter, page);
-            displayResults(mockResults);
-            state.isLoading = false;
-        }, 1000);
-    }
+if (localStorage.getItem("categoryEnabled") == null) {
+    console.log("No category enabled setting found, making new one")
+    var categoryEnabled = [true, true, true, true];
+    localStorage.setItem("categoryEnabled", JSON.stringify(categoryEnabled));
+}
+else {
+    console.log("Getting which category types are enabled from storage");
+    var categoryEnabled = JSON.parse(localStorage.getItem("categoryEnabled"));
+}
 
-    // Генерация mock-результатов для демонстрации
-    function generateMockResults(query, filter, page) {
-        const fileTypes = {
-            'image': ['jpg', 'png', 'gif', 'webp'],
-            'document': ['pdf', 'doc', 'docx', 'txt'],
-            'video': ['mp4', 'avi', 'mov', 'mkv'],
-            'audio': ['mp3', 'wav', 'ogg', 'flac'],
-            'other': ['zip', 'rar', 'exe', 'iso']
+//priority
+
+if (localStorage.getItem("prioritiseHighCat") == null) {
+    console.log("No priority/balance setting found, making new one")
+    var prioritiseHighCat = false;
+    localStorage.setItem("prioritiseHighCat", JSON.stringify(prioritiseHighCat));
+}
+else {
+    console.log("Getting prioritiseHighCat from storage");
+    var prioritiseHighCat = JSON.parse(localStorage.getItem("prioritiseHighCat"));
+}
+
+//Time element
+
+if (localStorage.getItem("timeElement") == null) {
+    console.log("No timeElement selected, use Date");
+    localStorage.setItem("timeElement", "Date");
+    tempElementSelection = "Date";
+}
+else {
+    console.log("Getting which element from localstorage");
+    tempElementSelection = localStorage.getItem("timeElement");
+
+}
+
+// sendorder
+
+if (localStorage.getItem("sendOrder") == null) {
+    console.log("No sendorder found, making new one")
+    worldUnits = game_data.units;
+    var sendOrder = [];
+    for (var i = 0; i < worldUnits.length; i++) {
+        if (worldUnits[i] != "militia" && worldUnits[i] != "snob" && worldUnits[i] != "ram" && worldUnits[i] != "catapult" && worldUnits[i] != "spy" && worldUnits[i] != "knight") {
+            sendOrder.push(worldUnits[i])
+        }
+    };
+    console.log(sendOrder);
+    localStorage.setItem("sendOrder", JSON.stringify(sendOrder));
+}
+else {
+    console.log("Getting sendorder from storage");
+    var sendOrder = JSON.parse(localStorage.getItem("sendOrder"));
+}
+
+// runtimes
+
+if (localStorage.getItem("runTimes") == null) {
+    console.log("No runTimes found, making new one")
+    var runTimes = {
+        "off": 4,
+        "def": 4
+    }    
+	localStorage.setItem("runTimes", JSON.stringify(runTimes));
+}
+else {
+    console.log("Getting runTimes from storage");
+	var runTimes = JSON.parse(localStorage.getItem("runTimes"));
+}
+
+if (typeof premiumBtnEnabled == 'undefined') {
+    var premiumBtnEnabled = false;
+}
+
+if (game_data.player.sitter > 0) {
+    URLReq = `game.php?t=${game_data.player.id}&screen=place&mode=scavenge_mass`;
+}
+else {
+    URLReq = "game.php?&screen=place&mode=scavenge_mass";
+}
+var arrayWithData;
+var enabledCategories = [];
+var availableUnits = [];
+var squad_requests = [];
+var squad_requests_premium = [];
+var scavengeInfo;
+var duration_factor = 0;
+var duration_exponent = 0;
+var duration_initial_seconds = 0;
+var categoryNames = JSON.parse("[" + $.find('script:contains("ScavengeMassScreen")')[0].innerHTML.match(/\{.*\:\{.*\:.*\}\}/g) + "]")[0];
+//basic setting, to be safe
+var time = {
+    'off': 0,
+    'def': 0
+};
+
+//colors for UI
+if (typeof colors == 'undefined') {
+    var backgroundColor = "#36393f";
+    var borderColor = "#3e4147";
+    var headerColor = "#202225";
+    var titleColor = "#ffffdf";
+    cssClassesSophie = `
+<style>
+.sophRowA {
+background-color: #32353b;
+color: white;
+}
+.sophRowB {
+background-color: #36393f;
+color: white;
+}
+.sophHeader {
+background-color: #202225;
+font-weight: bold;
+color: white;
+}
+.btnSophie
+{
+    background-image: linear-gradient(#6e7178 0%, #36393f 30%, #202225 80%, black 100%);
+}
+.btnSophie:hover
+{ 
+    background-image: linear-gradient(#7b7e85 0%, #40444a 30%, #393c40 80%, #171717 100%);
+}
+#x {
+    position: absolute;
+    background: red;
+    color: white;
+    top: 0px;
+    right: 0px;
+    width: 30px;
+    height: 30px;
+}
+#cog {
+    position: absolute;
+    background: #32353b;
+    color: white;
+    top: 0px;
+    right: 30px;
+    width: 30px;
+    height: 30px;
+}
+</style>`
+}
+else {
+    if (colors == 'pink') {
+        //pink theme
+        var colors = {
+            "backgroundColor": "#FEC5E5",
+            "borderColor": "#FF1694",
+            "headerColor": "#F699CD",
+            "titleColor": "#E11584"
         };
-
-        const results = [];
-        const startIndex = (page - 1) * config.resultsPerPage;
-        const totalResults = 47; // Mock total
-
-        for (let i = 0; i < config.resultsPerPage; i++) {
-            const index = startIndex + i;
-            if (index >= totalResults) break;
-
-            let fileType;
-            let extension;
-
-            if (filter === 'all') {
-                const allTypes = Object.values(fileTypes).flat();
-                extension = allTypes[Math.floor(Math.random() * allTypes.length)];
-            } else {
-                extension = fileTypes[filter][Math.floor(Math.random() * fileTypes[filter].length)];
-            }
-
-            const fileName = `${query}_file_${index + 1}.${extension}`;
-            const fileSize = Math.floor(Math.random() * 10000000) + 1000; // 1KB - 10MB
-
-            results.push({
-                id: index,
-                name: fileName,
-                size: fileSize,
-                type: extension,
-                url: `https://example.com/files/${fileName}`,
-                modified: new Date(Date.now() - Math.random() * 10000000000).toISOString()
-            });
+        var backgroundColor = colors.backgroundColor;
+        var borderColor = colors.borderColor;
+        var headerColor = colors.headerColor;
+        var titleColor = colors.titleColor;
+        cssClassesSophie = `
+        <style>
+        .btnSophie
+        {
+            background-image: linear-gradient(#FEC5E5 0%, #FD5DA8 30%, #FF1694 80%, #E11584 100%);
         }
-
-        state.totalResults = totalResults;
-        return results;
+        .btnSophie:hover
+        { 
+            background-image: linear-gradient(#F2B8C6 0%, #FCBACB 30%, #FA86C4 80%, #FE7F9C 100%);
+        }
+        #x {
+            position: absolute;
+            background: red;
+            color: white;
+            top: 0px;
+            right: 0px;
+            width: 30px;
+            height: 30px;
+        }
+        #cog {
+            position: absolute;
+            background: #FEC5E5;
+            color: white;
+            top: 0px;
+            right: 30px;
+            width: 30px;
+            height: 30px;
+        }
+        </style>`
     }
+    else if (colors == "swedish") {
+        //yellow/blue
 
-    // Отображение результатов
-    function displayResults(results) {
-        hideAllMessages();
-        
-        if (results.length === 0) {
-            showMessage('no_results');
+        var colors = {
+            "backgroundColor": "#fecd00",
+            "borderColor": "#03456b",
+            "headerColor": "#006aa8",
+            "titleColor": "#ffffdf"
+        };
+        var backgroundColor = colors.backgroundColor;
+        var borderColor = colors.borderColor;
+        var headerColor = colors.headerColor;
+        var titleColor = colors.titleColor;
+        cssClassesSophie = `
+        <style>
+        .btnSophie
+        {
+            background-image: linear-gradient(#00a1fe 0%, #5d9afd 30%, #1626ff 80%, #1f15e1 100%);
+        }
+        .btnSophie:hover
+        { 
+            background-image: linear-gradient(#b8bcf2 0%, #babbfc 30%, #8c86fa 80%, #969fff 100%);
+        }
+        #x {
+            position: absolute;
+            background: red;
+            color: white;
+            top: 0px;
+            right: 0px;
+            width: 30px;
+            height: 30px;
+        }
+        #cog {
+            position: absolute;
+            background: #fecd00;
+            color: white;
+            top: 0px;
+            right: 30px;
+            width: 30px;
+            height: 30px;
+        }
+        </style>`
+
+
+    }
+    else if (colors == "minimalistGray") {
+        //gray
+
+        var colors = {
+            "backgroundColor": "#f1f1f1",
+            "borderColor": "#777777",
+            "headerColor": "#ded9d9",
+            "titleColor": "#383834"
+        };
+        var backgroundColor = colors.backgroundColor;
+        var borderColor = colors.borderColor;
+        var headerColor = colors.headerColor;
+        var titleColor = colors.titleColor;
+        cssClassesSophie = `
+        <style>
+        .btnSophie
+        {
+            background-image: linear-gradient(#00a1fe 0%, #5d9afd 30%, #1626ff 80%, #1f15e1 100%);
+            color:white
+        }
+        .btnSophie:hover
+        { 
+            background-image: linear-gradient(#b8bcf2 0%, #babbfc 30%, #8c86fa 80%, #969fff 100%);
+            color: white
+        }
+        #x {
+            position: absolute;
+            background: red;
+            color: white;
+            top: 0px;
+            right: 0px;
+            width: 30px;
+            height: 30px;
+        }
+        #cog {
+            position: absolute;
+            background: #f1f1f1;
+            color: white;
+            top: 0px;
+            right: 30px;
+            width: 30px;
+            height: 30px;
+        }
+        </style>`
+
+
+    }
+    else if (colors == "TW") {
+        //TW
+        console.log("Changing to TW theme");
+        var backgroundColor = "#F4E4BC";
+        var borderColor = "#ecd7ac";
+        var headerColor = "#c6a768";
+        var titleColor = "#803000";
+        cssClassesSophie = `
+        <style>
+        .sophRowA {
+            background-color: #f4e4bc;
+            color: black;
+            }
+            .sophRowB {
+            background-color: #fff5da;
+            color: black;
+            }
+            .sophHeader {
+            background-color: #c6a768;
+            font-weight: bold;
+            color: #803000;
+            }
+            .sophLink
+            {
+                color:#803000;
+            }
+        .btnSophie
+        {
+            linear-gradient(to bottom, #947a62 0%,#7b5c3d 22%,#6c4824 30%,#6c4824 100%)
+            color:white
+        }
+        .btnSophie:hover
+        { 
+            linear-gradient(to bottom, #b69471 0%,#9f764d 22%,#8f6133 30%,#6c4d2d 100%);
+            color: white
+        }
+        #x {
+            position: absolute;
+            background: red;
+            color: white;
+            top: 0px;
+            right: 0px;
+            width: 30px;
+            height: 30px;
+        }
+        #cog {
+            position: absolute;
+            background: #f4e4bc;
+            color: white;
+            top: 0px;
+            right: 30px;
+            width: 30px;
+            height: 30px;
+        }
+        </style>`
+    }
+    else {
+        //standard
+        var backgroundColor = "#36393f";
+        var borderColor = "#3e4147";
+        var headerColor = "#202225";
+        var titleColor = "#ffffdf";
+        cssClassesSophie = `
+            <style>
+            .sophRowA {
+            background-color: #32353b;
+            color: white;
+            }
+            .sophRowB {
+            background-color: #36393f;
+            color: white;
+            }
+            .sophHeader {
+            background-color: #202225;
+            font-weight: bold;
+            color: white;
+            }
+            .btnSophie
+            {
+                background-image: linear-gradient(#6e7178 0%, #36393f 30%, #202225 80%, black 100%);
+            }
+            .btnSophie:hover
+            { 
+                background-image: linear-gradient(#7b7e85 0%, #40444a 30%, #393c40 80%, #171717 100%);
+            }
+            #x {
+                position: absolute;
+                background: red;
+                color: white;
+                top: 0px;
+                right: 0px;
+                width: 30px;
+                height: 30px;
+            }
+            #cog {
+                position: absolute;
+                background: #32353b;
+                color: white;
+                top: 0px;
+                right: 30px;
+                width: 30px;
+                height: 30px;
+            }
+            </style>`
+    }
+}
+
+//adding UI classes to page
+$("#contentContainer").eq(0).prepend(cssClassesSophie);
+$("#mobileHeader").eq(0).prepend(cssClassesSophie);
+
+$.getAll = function (
+    urls, // array of URLs
+    onLoad, // called when any URL is loaded, params (index, data)
+    onDone, // called when all URLs successfully loaded, no params
+    onError // called when a URL load fails or if onLoad throws an exception, params (error)
+) {
+    var numDone = 0;
+    var lastRequestTime = 0;
+    var minWaitTime = 200; // ms between requests
+    loadNext();
+    function loadNext() {
+        if (numDone == urls.length) {
+            onDone();
             return;
         }
 
-        const resultsContainer = document.getElementById('rss-results');
-        resultsContainer.innerHTML = '';
+        let now = Date.now();
+        let timeElapsed = now - lastRequestTime;
+        if (timeElapsed < minWaitTime) {
+            let timeRemaining = minWaitTime - timeElapsed;
+            setTimeout(loadNext, timeRemaining);
+            return;
+        }
+        console.log('Getting ', urls[numDone]);
+        $("#progress").css("width", `${(numDone + 1) / urls.length * 100}%`);
+        lastRequestTime = now;
+        $.get(urls[numDone])
+            .done((data) => {
+                try {
+                    onLoad(numDone, data);
+                    ++numDone;
+                    loadNext();
+                } catch (e) {
+                    onError(e);
+                }
+            })
+            .fail((xhr) => {
+                onError(xhr);
+            })
+    }
+};
 
-        results.forEach(result => {
-            const resultElement = createResultElement(result);
-            resultsContainer.appendChild(resultElement);
-        });
+//get scavenging data that is in play for this world, every world has different exponent, factor, and initial seconds. Also getting the URLS of each mass scavenging page
+//we can limit the amount of pages we need to call this way, since the mass scavenging pages have all the data that is necessary: troopcounts, which categories per village are unlocked, and if rally point exists.
+function getData() {
+    $("#massScavengeSophie").remove();
+    URLs = [];
+    $.get(URLReq, function (data) {
+        if ($(".paged-nav-item").length > 0) {
+            amountOfPages = parseInt($(".paged-nav-item")[$(".paged-nav-item").length - 1].href.match(/page=(\d+)/)[1]);
+        }
+        else {
+            amountOfPages = 0;
+        }
+        for (var i = 0; i <= amountOfPages; i++) {
+            //push url that belongs to scavenging page i
+            URLs.push(URLReq + "&page=" + i);
+            //get world data
+            tempData = JSON.parse($(data).find('script:contains("ScavengeMassScreen")').html().match(/\{.*\:\{.*\:.*\}\}/g)[0]);
+            duration_exponent = tempData[1].duration_exponent;
+            duration_factor = tempData[1].duration_factor;
+            duration_initial_seconds = tempData[1].duration_initial_seconds;
+        }
+        console.log(URLs);
 
-        updatePagination();
-        showElement('rss-results');
+    })
+        .done(function () {
+            //here we get all the village data and make an array with it, we won't be able to parse unless we add brackets before and after the string
+            arrayWithData = "[";
+            $.getAll(URLs,
+                (i, data) => {
+                    thisPageData = $(data).find('script:contains("ScavengeMassScreen")').html().match(/\{.*\:\{.*\:.*\}\}/g)[2];
+                    arrayWithData += thisPageData + ",";
+                },
+                () => {
+                    //on done
+                    arrayWithData = arrayWithData.substring(0, arrayWithData.length - 1);
+                    //closing bracket so we can parse the data into a useable array
+                    arrayWithData += "]";
+                    scavengeInfo = JSON.parse(arrayWithData);
+                    // count and calculate per village how many troops per category need to be sent. 
+                    // Once count is finished, make a new UI element, and group all the results per 200.
+                    // According to morthy, that is the limit at which the server will accept squad pushes.
+                    count = 0;
+                    for (var i = 0; i < scavengeInfo.length; i++) {
+                        calculateHaulCategories(scavengeInfo[i]);
+                        count++;
+                    }
+                    if (count == scavengeInfo.length) {
+                        //Post here
+                        console.log("Done");
+                        //need to split all the scavenging runs per 200, server limit according to morty
+                        squads = {};
+                        squads_premium = {};
+                        per200 = 0;
+                        groupNumber = 0;
+                        squads[groupNumber] = [];
+                        squads_premium[groupNumber] = [];
+                        for (var k = 0; k < squad_requests.length; k++) {
+                            if (per200 == 200) {
+                                groupNumber++;
+                                squads[groupNumber] = [];
+                                squads_premium[groupNumber] = [];
+                                per200 = 0;
+                            }
+                            per200++;
+                            squads[groupNumber].push(squad_requests[k]);
+                            squads_premium[groupNumber].push(squad_requests_premium[k]);
+                        }
+
+                        //create html send screen with button per launch
+                        console.log("Creating launch options");
+                        htmlWithLaunchButtons = `<div id="massScavengeFinal" class="ui-widget-content" style="position:fixed;background-color:${backgroundColor};cursor:move;z-index:50;">
+                        <button class="btn" id = "x" onclick="closeWindow('massScavengeFinal')">
+                            X
+                        </button>
+                        <table id="massScavengeSophieFinalTable" class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}">
+                        <tr>
+                            <td colspan="10" id="massScavengeSophieTitle" style="text-align:center; width:auto; background-color:${headerColor}">
+                                <h3>
+                                    <center style="margin:10px"><u>
+                                            <font color="${titleColor}">${langShinko[7]}</font>
+                                        </u>
+                                    </center>
+                                </h3>
+                            </td>
+                        </tr>`;
+                        for (var s = 0; s < Object.keys(squads).length; s++) {
+                            //add row with new button
+                            htmlWithLaunchButtons += `<tr id="sendRow${s}" style="text-align:center; width:auto; background-color:${backgroundColor}"><td style="text-align:center; width:auto; background-color:${backgroundColor}"><center><input type="button"  class="btn btnSophie" id="sendMass" onclick="sendGroup(${s},false)" value="${langShinko[8]}${s + 1}"></center></td><td style="text-align:center; width:auto; background-color:${backgroundColor}"><center><input type="button"  class="btn btn-pp btn-send-premium" id="sendMassPremium" onclick="sendGroup(${s},true)" value="${langShinko[8]}${s + 1} С PREMIUM" style="display:none"></center></td></tr>`
+                        }
+                        htmlWithLaunchButtons += "</table></div>"
+                        //appending to page
+                        console.log("Creating launch UI");
+                        $(".maincell").eq(0).prepend(htmlWithLaunchButtons);
+                        $("#mobileContent").eq(0).prepend(htmlWithLaunchButtons);
+
+                        if (is_mobile == false) {
+                            $("#massScavengeFinal").draggable();
+                        }
+                        for (var prem = 0; prem < $("#sendMassPremium").length; prem++) {
+                            if (premiumBtnEnabled == true) {
+                                $($("#sendMassPremium")[prem]).show();
+                            }
+                        }
+                        $("#sendMass")[0].focus()
+                    }
+                },
+                (error) => {
+                    console.error(error);
+                });
+        }
+        )
+}
+
+//first UI, will always open as soon as you run the script.
+html = `
+<div id="massScavengeSophie" class="ui-widget-content" style="width:580px;background-color:${backgroundColor};cursor:move;z-index:50;max-height:85vh;overflow-y:auto;">
+
+<button class="btn" id = "x" onclick="closeWindow('massScavengeSophie')">
+            X
+        </button>
+    <table id="massScavengeSophieTable" class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}">
+        <tr>
+            <td colspan="10" id="massScavengeSophieTitle" style="text-align:center; width:auto; background-color:${headerColor}">
+                <h4 style="margin:5px">
+                    <center><u>
+                            <font color="${titleColor}">${langShinko[0]}</font>
+                        </u>
+                    </center>
+                </h4>
+            </td>
+        </tr>
+        <tr style="background-color:${backgroundColor}">
+            <td style="text-align:center;background-color:${headerColor}" colspan="15">
+                <h5 style="margin:3px">
+                    <center><u>
+                            <font color="${titleColor}">${langShinko[1]}</font>
+                        </u></center>
+                </h5>
+            </td>
+        </tr>
+        <tr id="imgRow">
+        </tr>
+    </table>
+    
+    <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
+        <tbody>
+            <tr style="background-color:${backgroundColor}">
+                <td style="text-align:center;background-color:${headerColor}" colspan="4">
+                    <h5 style="margin:3px">
+                        <center><u>
+                                <font color="${titleColor}">${langShinko[2]}</font>
+                            </u></center>
+                    </h5>
+                </td>
+            </tr>
+            <tr id="categories" style="text-align:center; width:auto; background-color:${headerColor}">
+                <td style="text-align:center; width:auto; background-color:${headerColor};padding: 3px;">
+                    <font color="${titleColor}" style="font-size:12px">${categoryNames[1].name}</font>
+                </td>
+                <td style="text-align:center; width:auto; background-color:${headerColor};padding: 3px;">
+                    <font color="${titleColor}" style="font-size:12px">${categoryNames[2].name}</font>
+                </td>
+                <td style="text-align:center; width:auto; background-color:${headerColor};padding: 3px;">
+                    <font color="${titleColor}" style="font-size:12px">${categoryNames[3].name}</font>
+                </td>
+                <td style="text-align:center; width:auto; background-color:${headerColor};padding: 3px;">
+                    <font color="${titleColor}" style="font-size:12px">${categoryNames[4].name}</font>
+                </td>
+            </tr>
+            <tr>
+                <td style="text-align:center; width:auto; background-color:${backgroundColor}">
+                    <center><input type="checkbox" ID="category1" name="cat1"></center>
+                </td>
+                <td style="text-align:center; width:auto; background-color:${backgroundColor}">
+                    <center><input type="checkbox" ID="category2" name="cat2"></center>
+                </td>
+                <td style="text-align:center; width:auto; background-color:${backgroundColor}">
+                    <center><input type="checkbox" ID="category3" name="cat3"></center>
+                </td>
+                <td style="text-align:center; width:auto; background-color:${backgroundColor}">
+                    <center><input type="checkbox" ID="category4" name="cat4"></center>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
+        <tr id="runtimesTitle" style="text-align:center; width:auto; background-color:${headerColor}">
+            <td colspan="3" style="text-align:center; width:auto; background-color:${headerColor}">
+                <center style="margin:3px">
+                    <font color="${titleColor}" style="font-size:12px">${langShinko[3]}</font>
+                </center>
+            </td>
+        </tr>
+        <tr id="runtimes" style="text-align:center; width:auto; background-color:${headerColor}">
+            <td style="background-color:${headerColor};"></td>
+            <td style="text-align:center; width:auto; background-color:${headerColor};padding: 3px;">
+                <font color="${titleColor}" style="font-size:11px">Атакующие деревни</font>
+            </td>
+            <td style="text-align:center; width:auto; background-color:${headerColor};padding: 3px;">
+                <font color="${titleColor}" style="font-size:11px">Защитные деревни</font>
+            </td>
+        </tr>
+        <tr>
+            <td style="width:20px;background-color:${backgroundColor}; padding:2px;"><input type="radio" ID="timeSelectorDate" name="timeSelector" ></td>
+            <td style="text-align:center; width:auto; background-color:${backgroundColor}; padding:2px;">
+                <input type="date" id="offDay" name="offDay" value="${setDayToField(runTimes.off)}" style="font-size:11px; width:48%">
+                <input type="time" id="offTime" name="offTime" value="${setTimeToField(runTimes.off)}" style="font-size:11px; width:48%">
+            </td>
+            <td style="text-align:center; width:auto; background-color:${backgroundColor}; padding:2px;">
+                <input type="date" id="defDay" name="defDay" value="${setDayToField(runTimes.def)}" style="font-size:11px; width:48%">
+                <input type="time" id="defTime" name="defTime" value="${setTimeToField(runTimes.def)}" style="font-size:11px; width:48%">
+            </td>
+        </tr>
+        <tr>
+            <td style="width:20px;background-color:${backgroundColor}; padding:2px;"><input type="radio" ID="timeSelectorHours" name="timeSelector" ></td>
+            <td style="text-align:center; width:auto; background-color:${backgroundColor}; padding:2px;"><input type="text" class="runTime_off" style="background-color:${backgroundColor};color:${titleColor}; font-size:11px; width:90%" value="${runTimes['off']}" onclick="this.select();"></td>
+            <td style="text-align:center; width:auto; background-color:${backgroundColor}; padding:2px;"><input type="text" class="runTime_def" style="background-color:${backgroundColor};color:${titleColor}; font-size:11px; width:90%" value="${runTimes['def']}" onclick="this.select();"></td>
+        </tr>
+        <tr>
+            <td style="width:20px;background-color:${backgroundColor}; padding:2px;"></td>
+            <td style="text-align:center; width:auto; background-color:${backgroundColor}; padding:2px;"><font color="${titleColor}" style="font-size:10px"><span id="offDisplay"></span></font></td>
+            <td style="text-align:center; width:auto; background-color:${backgroundColor}; padding:2px;"><font color="${titleColor}" style="font-size:10px"><span id="defDisplay"></span></font></td>
+        </tr>
+    </table>
+    
+    <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
+        <tr id="settingPriorityTitle" style="text-align:center; width:auto; background-color:${headerColor}">
+            <td colspan="2" style="text-align:center; width:auto; background-color:${headerColor}">
+                <center style="margin:3px">
+                    <font color="${titleColor}" style="font-size:12px">Какой режим?</font>
+                </center>
+            </td>
+        </tr>
+        <tr id="settingPriorityHeader" style="text-align:center; width:auto; background-color:${headerColor}">
+            <td style="text-align:center; width:50%; background-color:${headerColor}; padding:2px;">
+                <font color="${titleColor}" style="font-size:11px">Сбалансированный</font>
+            </td>
+            <td style="text-align:center; width:50%; background-color:${headerColor}; padding:2px;">
+                <font color="${titleColor}" style="font-size:11px">Приоритет высших категорий</font>
+            </td>
+        </tr>
+        <tr id="settingPriority" style="text-align:center; width:auto; background-color:${headerColor}">
+            <td style="text-align:center; width:50%; background-color:${backgroundColor}; padding:2px;"><input type="radio" ID="settingPriorityBalanced" name="prio"></td>
+            <td style="text-align:center; width:50%; background-color:${backgroundColor}; padding:2px;"><input type="radio" ID="settingPriorityPriority" name="prio"></td>
+        </tr>
+    </table>
+    
+    <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
+        <tbody>
+            <tr style="background-color:${backgroundColor}">
+                <td style="text-align:center;background-color:${headerColor}" colspan="2">
+                    <h5 style="margin:3px">
+                        <center><u>
+                                <font color="${titleColor}">Фарм-деревни (легкая кавалерия остается дома)</font>
+                            </u></center>
+                    </h5>
+                </td>
+            </tr>
+            <tr style="text-align:center; width:auto; background-color:${backgroundColor}">
+                <td style="text-align:center; width:70%; background-color:${backgroundColor}; padding:5px;">
+                    <textarea 
+                        id="farmCoords" 
+                        class="form-control" 
+                        placeholder="Координаты: 123|456 789|012"
+                        rows="2"
+                        style="width: 100%; background-color: #202225; color: #ffffdf; border: 1px solid #3e4147; padding: 3px; resize: vertical; font-family: inherit; font-size:11px;">
+                    </textarea>
+                </td>
+                <td style="text-align:center; width:30%; background-color:${backgroundColor}; padding:5px; vertical-align: middle;">
+                    <input type="button" class="btn btnSophie" id="saveFarmCoordsBtn" value="Сохранить" style="margin: 2px; font-size:11px; padding:3px 8px;">
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
+        <tr style="text-align:center; width:auto; background-color:${headerColor}">
+            <td style="text-align:center; width:50%; background-color:${backgroundColor}; padding:3px;">
+                <center><input type="button" class="btn btnSophie" id="reset" onclick="resetSettings()" value="Сброс" style="font-size:11px; padding:4px 10px;"></center>
+            </td>
+            <td style="text-align:center; width:50%; background-color:${backgroundColor}; padding:3px;">
+                <center><input type="button" class="btn btnSophie" id="sendMass" onclick="readyToSend()" value="${langShinko[5]}" style="font-size:11px; padding:4px 10px;"></center>
+            </td>
+        </tr>
+    </table>
+
+    <div style="text-align:center; margin:5px 0;">
+        <img id="sophieImg" class="tooltip-delayed" title="Sophie -Shinko to Kuma-" src="https://dl.dropboxusercontent.com/s/bxoyga8wa6yuuz4/sophie2.gif" style="cursor:help; height:40px;">
+    </div>
+
+    <div style="text-align:center;">
+        <p style="margin:2px; font-size:11px;">
+            <font color="${titleColor}">${langShinko[6]} </font><a href="https://shinko-to-kuma.my-free.website/" style="text-shadow:-1px -1px 0 ${titleColor},1px -1px 0 ${titleColor},-1px 1px 0 ${titleColor},1px 1px 0 ${titleColor}; font-size:11px;" title="Sophie profile" target="_blank">Sophie "Shinko to Kuma"</a>
+        </p>
+    </div>
+</div>
+`;
+
+$(".maincell").eq(0).prepend(html);
+$("#mobileContent").eq(0).prepend(html);
+if (game_data.locale == "ar_AE") {
+    $("#sophieImg").attr("src", "https://media2.giphy.com/media/qYr8p3Dzbet5S/giphy.gif");
+}
+if (is_mobile == false) {
+    $("#massScavengeSophie").css("position", "fixed");
+    $("#massScavengeSophie").draggable();
+
+}
+
+$("#offDisplay")[0].innerText = fancyTimeFormat(runTimes.off * 3600);
+$("#defDisplay")[0].innerText = fancyTimeFormat(runTimes.def * 3600);
+if (tempElementSelection == "Date") {
+    $(`#timeSelectorDate`).prop("checked", true);
+    selectType("Date");
+    updateTimers();
+}
+else {
+    $(`#timeSelectorHours`).prop("checked", true);
+    selectType("Hours");
+    updateTimers();
+}
+
+// Загружаем сохраненные farmCoords
+var savedFarmCoords = localStorage.getItem("farmCoords");
+if (savedFarmCoords) {
+    document.getElementById('farmCoords').value = savedFarmCoords;
+}
+
+// Вешаем обработчик на кнопку Save
+$('#saveFarmCoordsBtn').click(function() {
+    cleanCoords('farmCoords');
+    var farmCoordsValue = document.getElementById('farmCoords').value;
+    localStorage.setItem("farmCoords", farmCoordsValue);
+    console.log("Farm coords saved to localStorage");
+});
+
+$("#offDay")[0].addEventListener("input", function () {
+    updateTimers();
+}, false)
+
+$("#defDay")[0].addEventListener("input", function () {
+    updateTimers();
+}, false)
+
+$("#offTime")[0].addEventListener("input", function () {
+    updateTimers();
+}, false)
+
+$("#defTime")[0].addEventListener("input", function () {
+    updateTimers();
+}, false)
+
+$(".runTime_off")[0].addEventListener("input", function () {
+    updateTimers();
+}, false)
+
+$(".runTime_def")[0].addEventListener("input", function () {
+    updateTimers();
+}, false)
+
+$("#timeSelectorDate")[0].addEventListener("input", function () {
+    selectType('Date');
+    updateTimers();
+}, false)
+
+$("#timeSelectorHours")[0].addEventListener("input", function () {
+    selectType('Hours');
+    updateTimers();
+}, false)
+
+//create checkboxes and add them to the UI
+for (var i = 0; i < sendOrder.length; i++) {
+    $("#imgRow").eq(0).append(`<td align="center" style="background-color:${backgroundColor}">
+    <table class="vis" border="1" style="width: 80px">
+    <tbody>    
+        <tr>
+            <td style="text-align:center;background-color:${headerColor};padding: 2px;">
+                <img src="https://dsen.innogamescdn.com/asset/cf2959e7/graphic/unit/unit_${sendOrder[i]}.png" title="${sendOrder[i]}" alt="" style="height:20px;">
+            </td>
+        </tr>
+        <tr>
+            <td align="center" style="background-color:${backgroundColor};padding: 1px;">
+                <input type="checkbox" ID="${sendOrder[i]}" name="${sendOrder[i]}" style="transform:scale(0.8)">
+            </td>
+        </tr>
+        <tr>
+            <td style="text-align:center; background-color:#202225;padding: 1px;">
+                <font color="#ffffdf" style="font-size:9px">Оставить дома</font>
+            </td>
+        </tr>
+        <tr>
+            <td align="center" style="background-color:${backgroundColor};padding: 1px;">
+                <input type="text" ID="${sendOrder[i]}Backup" name="${sendOrder[i]}" value="${keepHome[sendOrder[i]]}" size="3" style="font-size:10px; width:30px">
+            </td>
+        </tr>
+    </tbody>  
+    </table>
+</td>`);
+    $("#imgRow").sortable({
+        axis: "x",
+        revert: 100,
+        containment: "parent",
+        forceHelperSize: true,
+        delay: 100,
+        scroll: false
+    }).disableSelection();
+
+    if (prioritiseHighCat == true) {
+        console.log('setting high priority cat')
+        $(`#settingPriorityPriority`).prop("checked", true);
+    }
+    else {
+        console.log('setting balanced')
+        $(`#settingPriorityBalanced`).prop("checked", true);
     }
 
-    // Создание элемента результата
-    function createResultElement(result) {
-        const div = document.createElement('div');
-        div.className = 'rss-result-item';
+    enableCorrectTroopTypes();
+}
+
+//focus calculate button!
+$("#sendMass").focus();
+
+function readyToSend() {
+    //check if every setting is chosen, otherwise alert and abort
+    if ($("#settingPriorityPriority")[0].checked == false && $("#settingPriorityBalanced")[0].checked == false) {
+        // no setting chosen
+        alert("Вы не выбрали, как хотите распределить свои войска! Выберите либо приоритет высших категорий до выбранного времени выполнения, либо сбалансированное распределение по всем категориям!");
+        throw Error("didn't choose type");
+    }
+
+    if ($("#category1").is(":checked") == false && $("#category2").is(":checked") == false && $("#category3").is(":checked") == false && $("#category4").is(":checked") == false) {
+        // no category chosen
+        alert("Вы не выбрали, какие категории хотите использовать!");
+        throw Error("didn't choose category");
+    }
+
+    //get trooptypes we wanna use, and runtime
+    console.log(sendOrder);
+    for (var i = 0; i < sendOrder.length; i++) {
+        troopTypeEnabled[sendOrder[i]] = $(`:checkbox#${sendOrder[i]}`).is(":checked");
+    }
+    for (var i = 0; i < sendOrder.length; i++) {
+        keepHome[sendOrder[i]] = $(`#${sendOrder[i]}Backup`).val();
+    }
+    console.log(troopTypeEnabled);
+    enabledCategories.push($("#category1").is(":checked"));
+    enabledCategories.push($("#category2").is(":checked"));
+    enabledCategories.push($("#category3").is(":checked"));
+    enabledCategories.push($("#category4").is(":checked"));
+
+    if ($("#timeSelectorDate")[0].checked == true) {
+        localStorage.setItem("timeElement", "Date");
+        time.off = Date.parse($("#offDay").val().replace(/-/g, "/") + " " + $("#offTime").val());
+        time.def = Date.parse($("#defDay").val().replace(/-/g, "/") + " " + $("#defTime").val());
+        time.off = (time.off - serverDate) / 1000 / 3600;
+        time.def = (time.def - serverDate) / 1000 / 3600;
+    }
+    else {
+        localStorage.setItem("timeElement", "Hours");
+        time.off = $('.runTime_off').val();
+        time.def = $('.runTime_def').val();
+    }
+
+    console.log("Time off: " + time.off);
+    console.log("Time def: " + time.def);
+    if (time.off > 24 || time.def > 24) {
+        alert("Ваше время выполнения превышает 24 часа!");
+    }
+
+    console.log(sendOrder);
+    if ($("#settingPriorityPriority")[0].checked == true) {
+        prioritiseHighCat = true;
+    }
+    else {
+        prioritiseHighCat = false;
+    }
+
+    sendOrder = [];
+    for (var k = 0; k < $("#imgRow :checkbox").length; k++) {
+        sendOrder.push($("#imgRow :checkbox")[k].name)
+    }
+
+    console.log("Runtimes: Off: " + time.off + " Def: " + time.def);
+    localStorage.setItem("troopTypeEnabled", JSON.stringify(troopTypeEnabled));
+    localStorage.setItem("keepHome", JSON.stringify(keepHome));
+    localStorage.setItem("categoryEnabled", JSON.stringify(enabledCategories));
+    localStorage.setItem("prioritiseHighCat", JSON.stringify(prioritiseHighCat));
+    localStorage.setItem("sendOrder", JSON.stringify(sendOrder));
+    localStorage.setItem("runTimes", JSON.stringify(time));
+
+    console.log("Saved priority: " + prioritiseHighCat);
+    console.table(troopTypeEnabled);
+    console.table(time);
+    console.table(sendOrder);
+    console.table(enabledCategories);
+    categoryEnabled = enabledCategories;
+
+    getData();
+}
+
+function sendGroup(groupNr, premiumEnabled) {
+    if (premiumEnabled == true) {
+        actuallyEnabled = false;
+        actuallyEnabled = confirm("Вы уверены, что хотите отправить отряды очистки с использованием premium? Отмена отправит отряд очистки без premium.   ********* В ЗАВИСИМОСТИ ОТ КОЛИЧЕСТВА ЮНИТОВ/ДЕРЕВЕНЬ, КОТОРЫЕ ВЫ ОТПРАВЛЯЕТЕ, ЭТО МОЖЕТ ПРИВЕСТИ К ОЧЕНЬ ВЫСОКИМ ЗАТРАТАМ PP! ИСПОЛЬЗУЙТЕ ЭТУ ФУНКЦИЮ ТОЛЬКО ЕСЛИ ВЫ МОЖЕТЕ СЕБЕ ЭТО ПОЗВОЛИТЬ/ЗНАЕТЕ, СКОЛЬКО БУДУТ СТОИТЬ ОТДЕЛЬНЫЕ ЗАДАНИЯ С PP! *********");
+    }
+    else {
+        actuallyEnabled = false;
+    }
+    if (actuallyEnabled == true) {
+        tempSquads = squads_premium[groupNr];
+    }
+    else {
+        tempSquads = squads[groupNr];
+    }
+    //Send one group(one page worth of scavenging)
+    $(':button[id^="sendMass"]').prop('disabled', true)
+    $(':button[id^="sendMassPremium"]').prop('disabled', true)
+    TribalWars.post('scavenge_api', 
+    { ajaxaction: 'send_squads' }, 
+    { "squad_requests": tempSquads }, function () {
+        UI.SuccessMessage("Группа успешно отправлена");
+    },
+        !1
+    );
+
+    //once group is sent, remove the row from the table
+    setTimeout(function () { 
+        $(`#sendRow${groupNr}`).remove(); 
+        $(':button[id^="sendMass"]').prop('disabled', false); 
+        $(':button[id^="sendMassPremium"]').prop('disabled', false); 
+        $("#sendMass")[0].focus(); 
+    }, 200);
+}
+
+function calculateHaulCategories(data) {
+    //check if village has rally point
+    if (data.has_rally_point == true) {
+        console.log("can scavenge");
+		
+        // ==== ИСПРАВЛЕННЫЙ КОД: Проверяем по localStorage ====
+        var savedFarmCoords = localStorage.getItem("farmCoords");
+        var farmCoords = [];
+        var isFarmVillage = false;
         
-        const fileExtension = result.type.toUpperCase();
-        const fileSize = formatFileSize(result.size);
-        const modifiedDate = new Date(result.modified).toLocaleDateString('ru-RU');
+        if (savedFarmCoords && savedFarmCoords.trim() !== "") {
+            farmCoords = savedFarmCoords.split(' ');
+            var currentVillageCoords = data.village_name.match(/[0-9]{3}\|[0-9]{3}/);
+            
+            if (currentVillageCoords) {
+                currentVillageCoords = currentVillageCoords[0];
+                isFarmVillage = farmCoords.includes(currentVillageCoords);
+                
+                if (isFarmVillage) {
+                    console.log(`Деревня ${data.village_name} в списке фарма - легкие кони игнорируются`);
+                }
+            }
+        }
+        // ==== КОНЕЦ ИСПРАВЛЕННОГО КОДА ====
+		
+        var troopsAllowed = {};
+        for (key in troopTypeEnabled) {
+            if (troopTypeEnabled[key] == true) {
+                // ==== ИЗМЕНЕНИЕ: Для farm-деревень игнорируем light ====
+                if (isFarmVillage && key == "light") {
+                    troopsAllowed[key] = 0; // Игнорируем легких коней
+                    console.log("Легкие кони проигнорированы для фарм-деревни");
+                } else if (data.unit_counts_home[key] - keepHome[key] > 0) {
+                    troopsAllowed[key] = data.unit_counts_home[key] - keepHome[key];
+                }
+                else {
+                    troopsAllowed[key] = 0;
+                }
+            }
+        }
+		
+        var unitType = {
+            "spear": 'def',
+            "sword": 'def',
+            "axe": 'off',
+            "archer": 'def',
+            "light": 'off',
+            "marcher": 'off',
+            "heavy": 'def',
+        }
 
-        div.innerHTML = `
-            <div class="rss-file-icon">${fileExtension}</div>
-            <div class="rss-file-info">
-                <div class="rss-file-name">${result.name}</div>
-                <div class="rss-file-meta">
-                    <span>${getLocalizedText('file_size')}: ${fileSize}</span> • 
-                    <span>${getLocalizedText('file_type')}: ${fileExtension}</span> • 
-                    <span>${getLocalizedText('date_modified')}: ${modifiedDate}</span>
-                </div>
-            </div>
-            <div class="rss-file-actions">
-                <button class="rss-download-btn" onclick="downloadFile('${result.url}')" data-i18n="download">${getLocalizedText('download')}</button>
-                ${config.enablePreview ? `<button class="rss-preview-btn" onclick="previewFile('${result.url}')" data-i18n="preview">${getLocalizedText('preview')}</button>` : ''}
-            </div>
-        `;
+        var typeCount = { 'off': 0, 'def': 0 };
 
-        return div;
-    }
+        for (var prop in troopsAllowed) {
+            typeCount[unitType[prop]] = typeCount[unitType[prop]] + troopsAllowed[prop];
+        }
 
-    // Обновление пагинации
-    function updatePagination() {
-        const totalPages = Math.ceil(state.totalResults / config.resultsPerPage);
-        const currentPageElem = document.getElementById('rss-current-page');
-        const totalPagesElem = document.getElementById('rss-total-pages');
-        const prevBtn = document.getElementById('rss-prev-btn');
-        const nextBtn = document.getElementById('rss-next-btn');
-        const pagination = document.querySelector('.rss-pagination');
+        totalLoot = 0;
 
-        currentPageElem.textContent = state.currentPage;
-        totalPagesElem.textContent = totalPages;
-
-        prevBtn.disabled = state.currentPage <= 1;
-        nextBtn.disabled = state.currentPage >= totalPages;
-
-        if (totalPages > 1) {
-            showElement('rss-pagination');
+        //check what the max possible loot is
+        for (key in troopsAllowed) {
+            if (key == "spear") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 25);
+            if (key == "sword") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 15);
+            if (key == "axe") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 10);
+            if (key == "archer") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 10);
+            if (key == "light") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 80);
+            if (key == "marcher") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 50);
+            if (key == "heavy") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 50);
+            if (key == "knight") totalLoot += troopsAllowed[key] * (data.unit_carry_factor * 100);
+        }
+        console.log("Loot possible from this village: " + totalLoot);
+        if (totalLoot == 0) {
+            //can't loot from here, end
+            return;
+        }
+        if (typeCount.off > typeCount.def) {
+            haul = parseInt(((time.off * 3600) / duration_factor - duration_initial_seconds) ** (1 / (duration_exponent)) / 100) ** (1 / 2);
         } else {
-            hideElement('rss-pagination');
+            haul = parseInt(((time.def * 3600) / duration_factor - duration_initial_seconds) ** (1 / (duration_exponent)) / 100) ** (1 / 2);
+        }
+
+        haulCategoryRate = {};
+        //check which categories are enabled
+
+		if (data.options[1].scavenging_squad != null || data.options[2].scavenging_squad != null || data.options[3].scavenging_squad != null || data.options[4].scavenging_squad != null)
+		{
+			console.log("Поиски ещё не закончены");
+		}
+		else
+		{
+			if (data.options[1].is_locked == true || data.options[1].scavenging_squad != null) {
+				haulCategoryRate[1] = 0;
+			} else {
+				haulCategoryRate[1] = haul / 0.1;
+			}
+			if (data.options[2].is_locked == true || data.options[2].scavenging_squad != null) {
+				haulCategoryRate[2] = 0;
+			} else {
+				haulCategoryRate[2] = haul / 0.25;
+			}
+			if (data.options[3].is_locked == true || data.options[3].scavenging_squad != null) {
+				haulCategoryRate[3] = 0;
+			} else {
+				haulCategoryRate[3] = haul / 0.50;
+			}
+			if (data.options[4].is_locked == true || data.options[4].scavenging_squad != null) {
+				haulCategoryRate[4] = 0;
+			} else {
+				haulCategoryRate[4] = haul / 0.75;
+			}
+		}
+        console.log(haulCategoryRate);
+
+        for (var i = 0; i < enabledCategories.length; i++) {
+            if (enabledCategories[i] == false) haulCategoryRate[i + 1] = 0;
+        }
+
+        totalHaul = haulCategoryRate[1] + haulCategoryRate[2] + haulCategoryRate[3] + haulCategoryRate[4];
+
+        unitsReadyForSend = calculateUnitsPerVillage(troopsAllowed);
+
+        for (var k = 0; k < Object.keys(unitsReadyForSend).length; k++) {
+            candidate_squad = { "unit_counts": unitsReadyForSend[k], "carry_max": 9999999999 };
+            if (data.options[k + 1].is_locked == false) {
+                squad_requests.push({ "village_id": data.village_id, "candidate_squad": candidate_squad, "option_id": k + 1, "use_premium": false })
+                squad_requests_premium.push({ "village_id": data.village_id, "candidate_squad": candidate_squad, "option_id": k + 1, "use_premium": true })
+
+            }
         }
     }
-
-    // Вспомогательные функции для работы с DOM
-    function showLoading() {
-        hideAllMessages();
-        showElement('rss-loading');
-        hideElement('rss-results');
+    else {
+        console.log("no rally point");
     }
+}
 
-    function showMessage(type) {
-        hideAllMessages();
-        showElement(`rss-${type}`);
-        hideElement('rss-results');
-    }
-
-    function hideAllMessages() {
-        hideElement('rss-loading');
-        hideElement('rss-no-results');
-        hideElement('rss-error');
-    }
-
-    function showElement(id) {
-        const element = document.getElementById(id);
-        if (element) element.classList.remove('hidden');
-    }
-
-    function hideElement(id) {
-        const element = document.getElementById(id);
-        if (element) element.classList.add('hidden');
-    }
-
-    // Очистка поиска
-    function clearSearch() {
-        const searchInput = document.getElementById('rss-search-input');
-        const typeFilter = document.getElementById('rss-type-filter');
-        
-        searchInput.value = '';
-        typeFilter.value = 'all';
-        
-        state.currentQuery = '';
-        state.currentFilter = 'all';
-        state.currentPage = 1;
-        
-        hideAllMessages();
-        hideElement('rss-results');
-        hideElement('rss-pagination');
-    }
-
-    // Форматирование размера файла
-    function formatFileSize(bytes) {
-        if (bytes === 0) return '0 B';
-        
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    // Функции для действий с файлами
-    function downloadFile(url) {
-        window.open(url, '_blank');
-    }
-
-    function previewFile(url) {
-        window.open(url, '_blank');
-    }
-
-    // Экспорт функций в глобальную область видимости
-    window.downloadFile = downloadFile;
-    window.previewFile = previewFile;
-
-    // Инициализация при загрузке страницы
-    document.addEventListener('DOMContentLoaded', function() {
-        createSearchInterface();
-        
-        // Загрузка сохраненных настроек
-        const savedSettings = GM_getValue('rss_settings');
-        if (savedSettings) {
-            Object.assign(config, savedSettings);
+function enableCorrectTroopTypes() {
+    worldUnits = game_data.units;
+    for (var i = 0; i < worldUnits.length; i++) {
+        if (worldUnits[i] != "militia" && worldUnits[i] != "snob" && worldUnits[i] != "ram" && worldUnits[i] != "catapult" && worldUnits[i] != "spy") {
+            if (troopTypeEnabled[worldUnits[i]] == true) $(`#${worldUnits[i]}`).prop("checked", true);
         }
-    });
+    }
+    for (var i = 0; i < categoryEnabled.length + 1; i++) {
+        if (categoryEnabled[i] == true) {
+            $(`#category${i + 1}`).prop("checked", true);
+        }
+    }
+}
 
-})();
+function calculateUnitsPerVillage(troopsAllowed) {
+    var unitHaul = {
+        "spear": 25,
+        "sword": 15,
+        "axe": 10,
+        "archer": 10,
+        "light": 80,
+        "marcher": 50,
+        "heavy": 50,
+        "knight": 100
+    };
+    //calculate HERE :D
+    console.log(troopsAllowed)
+    unitsReadyForSend = {};
+    unitsReadyForSend[0] = {};
+    unitsReadyForSend[1] = {};
+    unitsReadyForSend[2] = {};
+    unitsReadyForSend[3] = {};
+    if (totalLoot > totalHaul) {
+        //too many units
+        console.log("too many units")
+        //prioritise higher category first
+        if (version != "old") {
+            for (var j = 3; j >= 0; j--) {
+                var reach = haulCategoryRate[j + 1];
+                sendOrder.forEach((unit) => {
+                    if (troopsAllowed.hasOwnProperty(unit) && reach > 0) {
+                        var amountNeeded = Math.floor(reach / unitHaul[unit]);
+
+                        if (amountNeeded > troopsAllowed[unit]) {
+                            unitsReadyForSend[j][unit] = troopsAllowed[unit];
+                            reach = reach - (troopsAllowed[unit] * unitHaul[unit]);
+                            troopsAllowed[unit] = 0;
+                        } else {
+                            unitsReadyForSend[j][unit] = amountNeeded;
+                            reach = 0;
+                            troopsAllowed[unit] = troopsAllowed[unit] - amountNeeded;
+                        }
+                    }
+                });
+            }
+        }
+        else {
+            for (var j = 0; j < 4; j++) {
+                for (key in troopsAllowed) {
+                    unitsReadyForSend[j][key] = Math.floor((haulCategoryRate[j + 1] * (troopsAllowed[key] / totalLoot)));
+                }
+            }
+
+        }
+    }
+    else {
+        //not enough units, spread evenly
+        troopNumber = 0;
+        for (key in troopsAllowed) {
+            troopNumber += troopsAllowed[key];
+        }
+        console.log(troopNumber);
+        if (prioritiseHighCat != true && troopNumber > 130) {
+            for (var j = 0; j < 4; j++) {
+                console.log("not enough units, but even balance")
+                for (key in troopsAllowed) {
+                    unitsReadyForSend[j][key] = Math.floor((totalLoot / totalHaul * haulCategoryRate[j + 1]) * (troopsAllowed[key] / totalLoot));
+                }
+            }
+        }
+        else {
+            //prioritise higher category first
+            for (var j = 3; j >= 0; j--) {
+                var reach = haulCategoryRate[j + 1];
+                sendOrder.forEach((unit) => {
+                    if (troopsAllowed.hasOwnProperty(unit) && reach > 0) {
+                        var amountNeeded = Math.floor(reach / unitHaul[unit]);
+
+                        if (amountNeeded > troopsAllowed[unit]) {
+                            unitsReadyForSend[j][unit] = troopsAllowed[unit];
+                            reach = reach - (troopsAllowed[unit] * unitHaul[unit]);
+                            troopsAllowed[unit] = 0;
+                        } else {
+                            unitsReadyForSend[j][unit] = amountNeeded;
+                            reach = 0;
+                            troopsAllowed[unit] = troopsAllowed[unit] - amountNeeded;
+                        }
+                    }
+                });
+            }
+        }
+    }
+    return unitsReadyForSend;
+}
+
+function resetSettings() {
+    localStorage.removeItem("troopTypeEnabled");
+    localStorage.removeItem("categoryEnabled");
+    localStorage.removeItem("prioritiseHighCat");
+    localStorage.removeItem("sendOrder");
+    localStorage.removeItem("runTimes");
+    localStorage.removeItem("keepHome");
+    localStorage.removeItem("farmCoords");
+    UI.BanneredRewardMessage("Настройки сброшены");
+    window.location.reload();
+}
+
+function closeWindow(title) {
+    $("#" + title).remove();
+}
+
+function zeroPadded(val) {
+    if (val >= 10)
+        return val;
+    else
+        return '0' + val;
+}
+
+function setTimeToField(runtimeType) {
+    d = Date.parse(new Date(serverDate)) + runtimeType * 1000 * 3600;
+    d = new Date(d);
+    d = zeroPadded(d.getHours()) + ":" + zeroPadded(d.getMinutes());
+    return d;
+}
+
+function setDayToField(runtimeType) {
+    d = Date.parse(new Date(serverDate)) + runtimeType * 1000 * 3600;
+    d = new Date(d);
+    d = d.getFullYear() + "-" + zeroPadded(d.getMonth() + 1) + "-" + zeroPadded(d.getDate());
+    return d;
+}
+
+function fancyTimeFormat(time) {
+    if (time < 0) {
+        return "Время в прошлом!"
+    }
+    else {
+        // Hours, minutes and seconds
+        var hrs = ~~(time / 3600);
+        var mins = ~~((time % 3600) / 60);
+        var secs = ~~time % 60;
+
+        // Output like "1:01" or "4:03:59" or "123:03:59"
+        var ret = "Макс. длительность: ";
+
+        if (hrs > 0) {
+            ret += "" + hrs + ":" + (mins < 10 ? "0" : "");
+        }
+        else {
+            ret += "0:" + (mins < 10 ? "0" : "");
+        }
+
+        ret += "" + mins + ":" + (secs < 10 ? "0" : "");
+        ret += "" + secs;
+        return ret;
+    }
+}
+
+function updateTimers() {
+    if ($("#timeSelectorDate")[0].checked == true) {
+        console.log("datebox")
+        $("#offDisplay")[0].innerText = fancyTimeFormat((Date.parse($("#offDay").val().replace(/-/g, "/") + " " + $("#offTime").val()) - serverDate) / 1000)
+        $("#defDisplay")[0].innerText = fancyTimeFormat((Date.parse($("#defDay").val().replace(/-/g, "/") + " " + $("#defTime").val()) - serverDate) / 1000)
+    }
+    else {
+        console.log("Textbox ")
+        $("#offDisplay")[0].innerText = fancyTimeFormat($(".runTime_off").val() * 3600)
+        $("#defDisplay")[0].innerText = fancyTimeFormat($(".runTime_def").val() * 3600)
+    }
+}
+
+function selectType(type) {
+    console.log("clicked" + type);
+    switch (type) {
+        case 'Hours':
+            if ($("#timeSelectorDate")[0].checked == true) {
+                $("#offDay").eq(0).removeAttr('disabled');
+                $("#defDay").eq(0).removeAttr('disabled');
+                $("#offTime").eq(0).removeAttr('disabled');;
+                $("#defTime").eq(0).removeAttr('disabled');
+                $(".runTime_off").prop("disabled", true);
+                $(".runTime_def").prop("disabled", true);
+            }
+            else {
+                $("#offDay").prop("disabled", true);
+                $("#defDay").prop("disabled", true);
+                $("#offTime").prop("disabled", true);
+                $("#defTime").prop("disabled", true);
+                $(".runTime_off").eq(0).removeAttr('disabled');
+                $(".runTime_def").eq(0).removeAttr('disabled');
+            }
+            break;
+        case 'Date':
+            if ($("#timeSelectorHours")[0].checked == true) {
+                $("#offDay").prop("disabled", true);
+                $("#defDay").prop("disabled", true);
+                $("#offTime").prop("disabled", true);
+                $("#defTime").prop("disabled", true);
+                $(".runTime_off").eq(0).removeAttr('disabled');
+                $(".runTime_def").eq(0).removeAttr('disabled');
+            }
+            else {
+                $("#offDay").eq(0).removeAttr('disabled');
+                $("#defDay").eq(0).removeAttr('disabled');
+                $("#offTime").eq(0).removeAttr('disabled');;
+                $("#defTime").eq(0).removeAttr('disabled');
+                $(".runTime_off").prop("disabled", true);
+                $(".runTime_def").prop("disabled", true);
+            }
+            break;
+        default:
+            break;
+    }
+}
+
+// Функция очистки координат
+function cleanCoords(textArea) {
+    var matched = document.getElementById(textArea).value.match(/[0-9]{3}\|[0-9]{3}/g);
+    if (matched) {
+        var output = matched.join(" ");
+        document.getElementById(textArea).value = output;
+    } else {
+        document.getElementById(textArea).value = "";
+    }
+}
