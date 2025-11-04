@@ -1776,7 +1776,7 @@
                 <input type="checkbox" id="troop_${unit.id}" class="unit-checkbox" 
                     ${troopTypesEnabled[unit.id] ? 'checked' : ''}>
                 <div class="unit-name">${unit.name}</div>
-                <input type="number" id="backup_${unit.id}" class="unit-backup" 
+                <input type="number" id="backup_${unit.id}" class="unit-backup compact" 
                     value="${keepHome[unit.id] || 0}" min="0" max="9999" 
                     placeholder="0" title="Оставить войск в деревне"
                     style="width: 60px;">
