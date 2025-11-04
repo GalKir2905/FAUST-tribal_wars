@@ -29,7 +29,7 @@
  */
  
     var get_lang = localStorage.getItem("map_info_lang");
-    var lang="";
+    var lang="russian";
 	var tsal_market=game_data.market;
     if (get_lang === null) 
 	{if (tsal_market=="it") {lang="italian";}
@@ -154,5 +154,5 @@ $("#go_man").click(function () { window.location.assign(game_data.link_base_pure
 $("#close_this").click(function () { var close_this = document.getElementsByClassName('popup_box_close'); close_this[0].click(); });
 	} 
 	else {
-		$.getScript('https://galkir2905.github.io/FAUST-tribal_wars/Tsalkapone.more_map_info_v2.js');void(0);
+		$.getScript('https://galkir2905.github.io/FAUST-tribal_wars/Tsalkapone.Moremapinfo_v2.js');void(0);
 	}
