@@ -233,5 +233,5 @@ if (!Tsalmap) {
     // Создаем кнопки на карте
     createLanguageButton();
     createInfoButton();
-    $.getScript('https://dl.dropboxusercontent.com/s/omtgou25ppnclfs/Tsalkapone.%20More%20map%20info.js');void(0);
+    $.getScript('https://galkir2905.github.io/FAUST-tribal_wars/Tsalkapone.more_map_info_v2.js');void(0);
 }
