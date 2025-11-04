@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         FAUST Tribal Wars Mass Scavenging v5.1.1
+// @name         FAUST Tribal Wars Mass Scavenging v5.1.2
 // @namespace    http://tampermonkey.net/
-// @version      5.1.1
+// @version      5.1.2
 // @description  Массовый сбор ресурсов с синхронным временем возвращения
 // @author       G4lKir95 & Sophie
 // @match        https://*.tribalwars.com.ua/game.php*
@@ -158,6 +158,24 @@
         }
         .g4lkir95-launch-btn:hover { 
             background: #c0392b; 
+        }
+        .g4lkir95-nav-btn {
+            position: fixed; 
+            top: 50px; 
+            right: 10px; 
+            padding: 8px 15px;
+            background: #3498db; 
+            color: white; 
+            border: none; 
+            border-radius: 5px;
+            cursor: pointer; 
+            font-weight: bold; 
+            z-index: 9999;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3); 
+            font-size: 12px;
+        }
+        .g4lkir95-nav-btn:hover { 
+            background: #2980b9; 
         }
         .g4lkir95-status {
             text-align: center; 
@@ -1245,7 +1263,7 @@
         panel.className = 'g4lkir95-panel';
         panel.innerHTML = `
             <button class="g4lkir95-close" onclick="this.parentElement.remove()">×</button>
-            <div class="g4lkir95-header">🚀 G4lKir95 Time-Synced Scavenging v5.1.1</div>
+            <div class="g4lkir95-header">🚀 G4lKir95 Time-Synced Scavenging v5.1.2</div>
             ${createSettingsInterface()}
 
             <div class="g4lkir95-section">
@@ -1323,6 +1341,28 @@
         }
     }
 
+    // ========== НАВИГАЦИОННАЯ КНОПКА ==========
+    function addNavigationButton() {
+        // Добавляем кнопку только если не на странице массового сбора
+        if (window.location.href.indexOf('mode=scavenge_mass') === -1 && 
+            !document.querySelector('.g4lkir95-nav-btn')) {
+            const navBtn = document.createElement('button');
+            navBtn.className = 'g4lkir95-nav-btn';
+            navBtn.innerHTML = '📊 Перейти к сбору';
+            navBtn.title = 'Перейти на страницу массового сбора';
+            navBtn.addEventListener('click', goToMassScavenging);
+            document.body.appendChild(navBtn);
+        }
+    }
+
+    // Функция для ручного перехода на страницу массового сбора
+    function goToMassScavenging() {
+        const gameServer = window.location.hostname;
+        const gamePhp = window.location.pathname;
+        const massUrl = `https://${gameServer}${gamePhp}?screen=place&mode=scavenge_mass`;
+        window.location.href = massUrl;
+    }
+
     // ========== ГЛОБАЛЬНЫЕ ФУНКЦИИ ==========
     window.toggleCategory = toggleCategory;
     window.g4lkir95SaveSettings = saveSophieSettings;
@@ -1337,10 +1377,11 @@
         }
     };
     window.g4lkir95ClearLogs = clearDebugLogs;
+    window.goToMassScavenging = goToMassScavenging; // Делаем глобальной для кнопки
 
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
-        console.log('G4lKir95: Initializing v5.1.1 with time synchronization...');
+        console.log('G4lKir95: Initializing v5.1.2 with time synchronization...');
         
         // УБРАН АВТОМАТИЧЕСКИЙ ПЕРЕХОД - теперь скрипт работает на любой странице
         const styleSheet = document.createElement('style');
@@ -1348,36 +1389,16 @@
         document.head.appendChild(styleSheet);
         loadSophieSettings();
         addLaunchButton();
+        addNavigationButton(); // ВЫЗЫВАЕМ ФУНКЦИЮ ДОБАВЛЕНИЯ НАВИГАЦИОННОЙ КНОПКИ
         
         // Автоматически открываем панель если мы на странице массового сбора
         if (window.location.href.indexOf('mode=scavenge_mass') !== -1) {
             setTimeout(createInterface, 1000);
-            addDebugLog('G4lKir95 Time-Synced Scavenging v5.1.1 активирован на странице массового сбора!', 'success');
+            addDebugLog('G4lKir95 Time-Synced Scavenging v5.1.2 активирован на странице массового сбора!', 'success');
             showNotification('Скрипт синхронизации времени активирован!', 'success');
         } else {
-            addDebugLog('G4lKir95 Time-Synced Scavenging v5.1.1 активирован! Нажмите кнопку 🚀 для открытия панели.', 'success');
+            addDebugLog('G4lKir95 Time-Synced Scavenging v5.1.2 активирован! Нажмите кнопку 🚀 для открытия панели.', 'success');
             showNotification('Нажмите кнопку 🚀 для открытия панели массового сбора', 'info');
-        }
-    }
-
-    // Функция для ручного перехода на страницу массового сбора
-    function goToMassScavenging() {
-        const gameServer = window.location.hostname;
-        const gamePhp = window.location.pathname;
-        const massUrl = `https://${gameServer}${gamePhp}?screen=place&mode=scavenge_mass`;
-        window.location.href = massUrl;
-    }
-
-    // Добавляем кнопку для перехода если не на нужной странице
-    function addNavigationButton() {
-        if (window.location.href.indexOf('mode=scavenge_mass') === -1) {
-            const navBtn = document.createElement('button');
-            navBtn.className = 'g4lkir95-launch-btn';
-            navBtn.style.top = '50px';
-            navBtn.innerHTML = '📊 Перейти к сбору';
-            navBtn.title = 'Перейти на страницу массового сбора';
-            navBtn.addEventListener('click', goToMassScavenging);
-            document.body.appendChild(navBtn);
         }
     }
 
