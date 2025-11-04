@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         FAUST Tribal Wars Mass Scavenging v5.1.2
+// @name         FAUST Tribal Wars Mass Scavenging v5.1.3
 // @namespace    http://tampermonkey.net/
-// @version      5.1.2
+// @version      5.1.3
 // @description  Массовый сбор ресурсов с синхронным временем возвращения
 // @author       G4lKir95 & Sophie
 // @match        https://*.tribalwars.com.ua/game.php*
@@ -479,6 +479,405 @@
         if (priorityCheckbox) {
             prioritiseHighCat = priorityCheckbox.checked;
         }
+    }
+
+    // ========== УЛУЧШЕННЫЙ ПОИСК ДЕРЕВЕНЬ ==========
+    function getImprovedVillageData() {
+        addDebugLog('Улучшенный поиск данных о деревнях...', 'info');
+        const villages = [];
+        
+        try {
+            // Расширенный поиск деревень
+            const villageRows = findVillageRows();
+            addDebugLog(`Найдено потенциальных строк: ${villageRows.length}`, 'info');
+            
+            if (villageRows.length === 0) {
+                addDebugLog('Пробуем альтернативные методы поиска...', 'warning');
+                debugPageStructure();
+            }
+            
+            let processedCount = 0;
+            
+            for (let row of villageRows) {
+                try {
+                    const villageInfo = extractVillageInfo(row);
+                    if (!villageInfo) {
+                        addDebugLog('Не удалось извлечь информацию о деревне из строки', 'warning');
+                        continue;
+                    }
+                    
+                    const units = getRealUnitsFromRow(row, villageInfo.name);
+                    const options = getCategoryOptions();
+                    
+                    villages.push({
+                        id: villageInfo.id,
+                        name: villageInfo.name,
+                        units: units,
+                        options: options,
+                        availableTroops: Object.values(units).reduce((sum, count) => sum + count, 0),
+                        row: row
+                    });
+                    
+                    processedCount++;
+                    addDebugLog(`✅ ${villageInfo.name} - войск: ${villages[villages.length-1].availableTroops}`, 'success');
+                    
+                } catch (e) {
+                    addDebugLog(`Ошибка обработки строки: ${e.message}`, 'error');
+                }
+            }
+            
+            addDebugLog(`Обработано деревень: ${processedCount}`, 'success');
+            
+            if (processedCount === 0) {
+                addDebugLog('Не найдено деревень для обработки. Возможные причины:', 'error');
+                addDebugLog('- Страница не загрузилась полностью', 'error');
+                addDebugLog('- Нет доступных войск для сбора', 'error');
+                addDebugLog('- Изменилась структура страницы', 'error');
+            }
+            
+            return villages;
+            
+        } catch (e) {
+            addDebugLog(`Критическая ошибка: ${e.message}`, 'error');
+            return [];
+        }
+    }
+
+    function findVillageRows() {
+        const rows = [];
+        
+        addDebugLog('=== ПОИСК ДЕРЕВЕНЬ НА СТРАНИЦЕ ===', 'info');
+        
+        // 1. Ищем по основным селекторам Tribal Wars
+        const selectors = [
+            'tr.nowrap',
+            'tr.village',
+            '.village_list_row',
+            'table.vis tr',
+            '.content-border tr',
+            '#scavenge_mass_content tr',
+            '.mass_scavenge_content tr',
+            'tr[data-village-id]',
+            '.village-row'
+        ];
+        
+        for (const selector of selectors) {
+            const elements = document.querySelectorAll(selector);
+            addDebugLog(`Селектор "${selector}": ${elements.length} элементов`, 'info');
+            
+            for (let element of elements) {
+                if (isValidVillageRow(element) && !rows.includes(element)) {
+                    rows.push(element);
+                    addDebugLog(`✅ Найдена строка через селектор: ${selector}`, 'success');
+                }
+            }
+        }
+        
+        // 2. Ищем по содержанию координат
+        if (rows.length === 0) {
+            addDebugLog('Поиск по координатам...', 'info');
+            const allElements = document.body.getElementsByTagName('*');
+            let coordElements = [];
+            
+            for (let element of allElements) {
+                if (element.textContent && element.textContent.match(/\(\d+\|\d+\)/)) {
+                    coordElements.push(element);
+                }
+            }
+            
+            addDebugLog(`Найдено элементов с координатами: ${coordElements.length}`, 'info');
+            
+            for (let element of coordElements) {
+                // Находим ближайший контейнер строки
+                let row = element.closest('tr') || 
+                         element.closest('.row') || 
+                         element.closest('.village-row') ||
+                         element;
+                         
+                if (isValidVillageRow(row) && !rows.includes(row)) {
+                    rows.push(row);
+                    addDebugLog(`✅ Найдена строка по координатам`, 'success');
+                }
+            }
+        }
+        
+        // 3. Ищем все таблицы и строки с кнопками отправки
+        if (rows.length === 0) {
+            addDebugLog('Поиск по элементам управления...', 'info');
+            const allTables = document.querySelectorAll('table');
+            
+            for (let table of allTables) {
+                const tableRows = table.querySelectorAll('tr');
+                for (let row of tableRows) {
+                    if (hasScavengeControls(row) && !rows.includes(row)) {
+                        rows.push(row);
+                        addDebugLog(`✅ Найдена строка с элементами управления`, 'success');
+                    }
+                }
+            }
+        }
+        
+        addDebugLog(`Итог поиска: ${rows.length} строк`, rows.length > 0 ? 'success' : 'error');
+        return rows;
+    }
+
+    function debugPageStructure() {
+        addDebugLog('=== ДИАГНОСТИКА СТРУКТУРЫ СТРАНИЦЫ ===', 'info');
+        
+        // Логируем основные элементы страницы
+        const mainContainers = [
+            '#scavenge_mass_content',
+            '.mass_scavenge_content',
+            '#content-border',
+            '.content-border',
+            '.vis'
+        ];
+        
+        mainContainers.forEach(selector => {
+            const element = document.querySelector(selector);
+            addDebugLog(`Контейнер ${selector}: ${element ? 'найден' : 'не найден'}`, 
+                       element ? 'success' : 'error');
+        });
+        
+        // Логируем таблицы
+        const tables = document.querySelectorAll('table');
+        addDebugLog(`Всего таблиц на странице: ${tables.length}`, 'info');
+        
+        tables.forEach((table, index) => {
+            const rows = table.querySelectorAll('tr');
+            addDebugLog(`Таблица ${index}: ${rows.length} строк`, 'info');
+        });
+        
+        // Логируем кнопки
+        const buttons = document.querySelectorAll('button, input[type="submit"]');
+        addDebugLog(`Всего кнопок на странице: ${buttons.length}`, 'info');
+        
+        // Логируем элементы с координатами
+        const coordElements = [];
+        const allElements = document.body.getElementsByTagName('*');
+        for (let element of allElements) {
+            if (element.textContent && element.textContent.match(/\(\d+\|\d+\)/)) {
+                coordElements.push(element);
+            }
+        }
+        addDebugLog(`Элементов с координатами: ${coordElements.length}`, 'info');
+    }
+
+    function isValidVillageRow(element) {
+        if (!element || !element.textContent) {
+            return false;
+        }
+        
+        const text = element.textContent;
+        
+        // Должны быть координаты деревни
+        const hasCoords = text.match(/\(\d+\|\d+\)/);
+        if (!hasCoords) {
+            return false;
+        }
+        
+        // Должны быть элементы управления сбором
+        const hasControls = hasScavengeControls(element);
+        if (!hasControls) {
+            return false;
+        }
+        
+        // Не должна быть строка заголовка
+        const isHeader = text.includes('Название деревни') || 
+                        text.includes('Координаты') || 
+                        text.includes('Доступно войск') ||
+                        text.match(/собиратели/i);
+        if (isHeader) {
+            return false;
+        }
+        
+        return true;
+    }
+
+    function hasScavengeControls(element) {
+        // Расширенный поиск элементов управления
+        const buttons = element.querySelectorAll('button, input[type="submit"], input[type="button"]');
+        const selects = element.querySelectorAll('select');
+        
+        // Проверяем кнопки отправки
+        const scavengeButtons = Array.from(buttons).filter(btn => {
+            const text = (btn.textContent || btn.value || '').toLowerCase();
+            const isSendButton = text.includes('отправить') || 
+                               text.includes('send') || 
+                               text.includes('сбор');
+            return isSendButton;
+        });
+        
+        // Проверяем выпадающие списки категорий
+        const scavengeSelects = Array.from(selects).filter(select => {
+            const options = select.querySelectorAll('option');
+            return Array.from(options).some(opt => 
+                opt.textContent.includes('собиратель') || 
+                opt.textContent.includes('scavenge')
+            );
+        });
+        
+        const hasControls = scavengeButtons.length > 0 || scavengeSelects.length > 0;
+        
+        if (hasControls) {
+            addDebugLog(`Найдены элементы управления: кнопок=${scavengeButtons.length}, селектов=${scavengeSelects.length}`, 'success');
+        }
+        
+        return hasControls;
+    }
+
+    function extractVillageInfo(row) {
+        // Ищем ссылку на деревню с координатами
+        const links = row.querySelectorAll('a[href*="village"]');
+        
+        for (let link of links) {
+            const href = link.getAttribute('href');
+            const villageIdMatch = href.match(/village=(\d+)/);
+            const text = link.textContent;
+            
+            if (villageIdMatch && text.match(/\(\d+\|\d+\)/)) {
+                return { 
+                    id: villageIdMatch[1], 
+                    name: text.trim() 
+                };
+            }
+        }
+        
+        // Альтернативный поиск по тексту строки
+        const text = row.textContent;
+        const coordMatch = text.match(/\((\d+\|\d+)\)/);
+        if (coordMatch) {
+            // Создаем временный ID на основе координат
+            const coords = coordMatch[1].replace('|', '_');
+            return {
+                id: 'temp_' + coords,
+                name: coordMatch[0]
+            };
+        }
+        
+        return null;
+    }
+
+    function getRealUnitsFromRow(row, villageName) {
+        const units = {};
+        worldUnits.forEach(unit => units[unit.id] = 0);
+        
+        try {
+            addDebugLog(`Получение войск для деревни: ${villageName}`, 'info');
+            
+            // Получаем реальное количество доступных войск
+            const availableTroops = extractAvailableTroops(row);
+            
+            if (availableTroops > 0) {
+                addDebugLog(`  Доступно войск: ${availableTroops}`, 'success');
+                distributeAvailableTroops(units, availableTroops);
+            } else {
+                addDebugLog(`  Не удалось определить количество войск, используем значения по умолчанию`, 'warning');
+                distributeDefaultTroops(units);
+            }
+            
+        } catch (e) {
+            addDebugLog(`Ошибка получения войск: ${e.message}`, 'error');
+            distributeDefaultTroops(units);
+        }
+        
+        return units;
+    }
+
+    function extractAvailableTroops(row) {
+        const text = row.textContent;
+        
+        // Паттерны для поиска количества доступных войск
+        const patterns = [
+            /(\d+)\s*\/\s*\d+\s+доступно/i,
+            /доступно[^\d]*(\d+)/i,
+            /(\d+)\s+доступно/i,
+            /available[^\d]*(\d+)/i,
+            /(\d+)\s+available/i
+        ];
+        
+        for (const pattern of patterns) {
+            const match = text.match(pattern);
+            if (match) {
+                const count = parseInt(match[1]);
+                if (count > 0) {
+                    addDebugLog(`  Найдено войск по паттерну: ${count}`, 'success');
+                    return count;
+                }
+            }
+        }
+        
+        // Поиск больших чисел как запасной вариант
+        const numbers = text.match(/\d+/g);
+        if (numbers) {
+            const largeNumbers = numbers.map(n => parseInt(n)).filter(n => n > 10 && n < 100000);
+            if (largeNumbers.length > 0) {
+                const maxNumber = Math.max(...largeNumbers);
+                addDebugLog(`  Найдено войск по большому числу: ${maxNumber}`, 'info');
+                return maxNumber;
+            }
+        }
+        
+        addDebugLog(`  Не удалось определить количество войск`, 'warning');
+        return 0;
+    }
+
+    function distributeAvailableTroops(units, totalTroops) {
+        const enabledUnits = worldUnits.filter(unit => troopTypesEnabled[unit.id]);
+        
+        if (enabledUnits.length === 0) {
+            addDebugLog('  Нет выбранных типов войск для распределения', 'error');
+            return;
+        }
+        
+        addDebugLog(`  Распределение ${totalTroops} войск по ${enabledUnits.length} типам`, 'info');
+        
+        const totalCapacity = enabledUnits.reduce((sum, unit) => sum + unit.capacity, 0);
+        let remaining = totalTroops;
+        
+        enabledUnits.forEach((unit, index) => {
+            if (remaining <= 0) return;
+            
+            const share = unit.capacity / totalCapacity;
+            let count = Math.floor(totalTroops * share);
+            
+            // Гарантируем минимум 1 юнит каждого типа
+            count = Math.max(count, 1);
+            count = Math.min(count, remaining);
+            
+            units[unit.id] = count;
+            remaining -= count;
+            
+            addDebugLog(`    ${unit.name}: ${count} войск`, 'info');
+        });
+        
+        // Распределяем остаток
+        if (remaining > 0 && enabledUnits.length > 0) {
+            units[enabledUnits[0].id] += remaining;
+            addDebugLog(`    Остаток ${remaining} добавлен к ${enabledUnits[0].name}`, 'info');
+        }
+        
+        addDebugLog(`  Распределение завершено`, 'success');
+    }
+
+    function distributeDefaultTroops(units) {
+        addDebugLog('  Используем значения по умолчанию', 'warning');
+        worldUnits.forEach(unit => {
+            if (troopTypesEnabled[unit.id]) {
+                units[unit.id] = 50; // Консервативное значение по умолчанию
+            }
+        });
+    }
+
+    function getCategoryOptions() {
+        const options = {};
+        for (let i = 1; i <= 4; i++) {
+            options[i] = {
+                available: categoryEnabled[i-1],
+                name: categoryNames[i]
+            };
+        }
+        return options;
     }
 
     // ========== РАСЧЕТ ПО ВРЕМЕНИ ВОЗВРАЩЕНИЯ ==========
@@ -1377,27 +1776,32 @@
         }
     };
     window.g4lkir95ClearLogs = clearDebugLogs;
-    window.goToMassScavenging = goToMassScavenging; // Делаем глобальной для кнопки
+    window.goToMassScavenging = goToMassScavenging;
 
     // ========== ИНИЦИАЛИЗАЦИЯ ==========
     function init() {
-        console.log('G4lKir95: Initializing v5.1.2 with time synchronization...');
+        console.log('G4lKir95: Initializing v5.1.3 with improved village detection...');
         
-        // УБРАН АВТОМАТИЧЕСКИЙ ПЕРЕХОД - теперь скрипт работает на любой странице
         const styleSheet = document.createElement('style');
         styleSheet.textContent = styles;
         document.head.appendChild(styleSheet);
         loadSophieSettings();
         addLaunchButton();
-        addNavigationButton(); // ВЫЗЫВАЕМ ФУНКЦИЮ ДОБАВЛЕНИЯ НАВИГАЦИОННОЙ КНОПКИ
+        addNavigationButton();
         
-        // Автоматически открываем панель если мы на странице массового сбора
         if (window.location.href.indexOf('mode=scavenge_mass') !== -1) {
             setTimeout(createInterface, 1000);
-            addDebugLog('G4lKir95 Time-Synced Scavenging v5.1.2 активирован на странице массового сбора!', 'success');
+            addDebugLog('G4lKir95 Time-Synced Scavenging v5.1.3 активирован на странице массового сбора!', 'success');
             showNotification('Скрипт синхронизации времени активирован!', 'success');
+            
+            // Тестовый поиск деревень при загрузке
+            setTimeout(() => {
+                const testVillages = getImprovedVillageData();
+                addDebugLog(`Тестовый поиск: найдено ${testVillages.length} деревень`, 
+                           testVillages.length > 0 ? 'success' : 'warning');
+            }, 2000);
         } else {
-            addDebugLog('G4lKir95 Time-Synced Scavenging v5.1.2 активирован! Нажмите кнопку 🚀 для открытия панели.', 'success');
+            addDebugLog('G4lKir95 Time-Synced Scavenging v5.1.3 активирован! Нажмите кнопку 🚀 для открытия панели.', 'success');
             showNotification('Нажмите кнопку 🚀 для открытия панели массового сбора', 'info');
         }
     }
