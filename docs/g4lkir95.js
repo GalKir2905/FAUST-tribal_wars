@@ -12,7 +12,7 @@ if (window.location.href.indexOf('screen=place&mode=scavenge_mass') < 0) {
     window.location.assign(game_data.link_base_pure + "place&mode=scavenge_mass");
 }
 
-$("#massScavengeSophie").remove();
+$("#massScavengeGalkir95").remove();
 //set global variables
 
 if (typeof version == 'undefined') {
@@ -133,9 +133,9 @@ function uiLogEnsurePanel() {
   <div id="massScavengeLogHeader">
     <div>Подробные логи</div>
     <div id="massScavengeLogControls">
-      <button class="btn btnSophie" id="logPauseBtn">Пауза</button>
-      <button class="btn btnSophie" id="logClearBtn">Очистить</button>
-      <button class="btn btnSophie" id="logCloseBtn">Скрыть</button>
+      <button class="btn btnGalkir95" id="logPauseBtn">Пауза</button>
+      <button class="btn btnGalkir95" id="logClearBtn">Очистить</button>
+      <button class="btn btnGalkir95" id="logCloseBtn">Скрыть</button>
     </div>
   </div>
   <div id="massScavengeLogBody"></div>
@@ -425,7 +425,7 @@ if (typeof colors == 'undefined') {
     var borderColor = "#3e4147";
     var headerColor = "#202225";
     var titleColor = "#ffffdf";
-    cssClassesSophie = `
+    cssClassesGalkir95 = `
 <style>
 .compact * { font-size: 90% !important; }
 .compact table.vis td { padding: 2px !important; }
@@ -443,11 +443,11 @@ background-color: #202225;
 font-weight: bold;
 color: white;
 }
-.btnSophie
+.btnGalkir95
 {
     background-image: linear-gradient(#6e7178 0%, #36393f 30%, #202225 80%, black 100%);
 }
-.btnSophie:hover
+.btnGalkir95:hover
 { 
     background-image: linear-gradient(#7b7e85 0%, #40444a 30%, #393c40 80%, #171717 100%);
 }
@@ -484,13 +484,13 @@ else {
         var borderColor = colors.borderColor;
         var headerColor = colors.headerColor;
         var titleColor = colors.titleColor;
-        cssClassesSophie = `
+        cssClassesGalkir95 = `
         <style>
-        .btnSophie
+        .btnGalkir95
         {
             background-image: linear-gradient(#FEC5E5 0%, #FD5DA8 30%, #FF1694 80%, #E11584 100%);
         }
-        .btnSophie:hover
+        .btnGalkir95:hover
         { 
             background-image: linear-gradient(#F2B8C6 0%, #FCBACB 30%, #FA86C4 80%, #FE7F9C 100%);
         }
@@ -526,7 +526,7 @@ else {
         var borderColor = colors.borderColor;
         var headerColor = colors.headerColor;
         var titleColor = colors.titleColor;
-        cssClassesSophie = `
+        cssClassesGalkir95 = `
         <style>
         .compact * { font-size: 90% !important; }
         .compact table.vis td { padding: 2px !important; }
@@ -534,14 +534,14 @@ else {
         .sophRowA { background-color: #2c3e50; color: #ecf0f1; }
         .sophRowB { background-color: #2c3e50; color: #ecf0f1; }
         .sophHeader { background-color: #34495e; font-weight: bold; color: #ecf0f1; }
-        .btnSophie { background: #e74c3c; color: #ffffff; border: none; }
-        .btnSophie:hover { background: #c0392b; }
+        .btnGalkir95 { background: #e74c3c; color: #ffffff; border: none; }
+        .btnGalkir95:hover { background: #c0392b; }
         .btn-pp { background: #27ae60; color: #ffffff; }
         .btn-pp:hover { background: #219a52; }
         #x { position: absolute; background: #e74c3c; color: white; top: 0px; right: 0px; width: 30px; height: 30px; border: none; }
         #cog { position: absolute; background: #34495e; color: white; top: 0px; right: 30px; width: 30px; height: 30px; border: none; }
-        #massScavengeSophie { border: 2px solid #34495e; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
-        #massScavengeSophieTable { border-radius: 6px; }
+        #massScavengeGalkir95 { border: 2px solid #34495e; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        #massScavengeGalkir95Table { border-radius: 6px; }
         </style>`
     }
     else if (colors == 'modernDark') {
@@ -556,7 +556,7 @@ else {
         var borderColor = colors.borderColor;
         var headerColor = colors.headerColor;
         var titleColor = colors.titleColor;
-        cssClassesSophie = `
+        cssClassesGalkir95 = `
         <style>
         .compact * { font-size: 90% !important; }
         .compact table.vis td { padding: 2px !important; }
@@ -564,8 +564,8 @@ else {
         .sophRowA { background-color: #232a36; color: #e6edf3; }
         .sophRowB { background-color: #1f2430; color: #e6edf3; }
         .sophHeader { background-color: #151a24; font-weight: bold; color: #e6edf3; }
-        .btnSophie { background-image: linear-gradient(#3a4254 0%, #2a3242 50%, #151a24 100%); color:#e6edf3 }
-        .btnSophie:hover { background-image: linear-gradient(#4a556b 0%, #39445a 50%, #1b2230 100%); }
+        .btnGalkir95 { background-image: linear-gradient(#3a4254 0%, #2a3242 50%, #151a24 100%); color:#e6edf3 }
+        .btnGalkir95:hover { background-image: linear-gradient(#4a556b 0%, #39445a 50%, #1b2230 100%); }
         #x { position: absolute; background: #ab2b2b; color: white; top: 0px; right: 0px; width: 30px; height: 30px; }
         #cog { position: absolute; background: #232a36; color: white; top: 0px; right: 30px; width: 30px; height: 30px; }
         </style>`
@@ -583,13 +583,13 @@ else {
         var borderColor = colors.borderColor;
         var headerColor = colors.headerColor;
         var titleColor = colors.titleColor;
-        cssClassesSophie = `
+        cssClassesGalkir95 = `
         <style>
-        .btnSophie
+        .btnGalkir95
         {
             background-image: linear-gradient(#00a1fe 0%, #5d9afd 30%, #1626ff 80%, #1f15e1 100%);
         }
-        .btnSophie:hover
+        .btnGalkir95:hover
         { 
             background-image: linear-gradient(#b8bcf2 0%, #babbfc 30%, #8c86fa 80%, #969fff 100%);
         }
@@ -628,14 +628,14 @@ else {
         var borderColor = colors.borderColor;
         var headerColor = colors.headerColor;
         var titleColor = colors.titleColor;
-        cssClassesSophie = `
+        cssClassesGalkir95 = `
         <style>
-        .btnSophie
+        .btnGalkir95
         {
             background-image: linear-gradient(#00a1fe 0%, #5d9afd 30%, #1626ff 80%, #1f15e1 100%);
             color:white
         }
-        .btnSophie:hover
+        .btnGalkir95:hover
         { 
             background-image: linear-gradient(#b8bcf2 0%, #babbfc 30%, #8c86fa 80%, #969fff 100%);
             color: white
@@ -669,7 +669,7 @@ else {
         var borderColor = "#ecd7ac";
         var headerColor = "#c6a768";
         var titleColor = "#803000";
-        cssClassesSophie = `
+        cssClassesGalkir95 = `
         <style>
         .sophRowA {
             background-color: #f4e4bc;
@@ -688,12 +688,12 @@ else {
             {
                 color:#803000;
             }
-        .btnSophie
+        .btnGalkir95
         {
             linear-gradient(to bottom, #947a62 0%,#7b5c3d 22%,#6c4824 30%,#6c4824 100%)
             color:white
         }
-        .btnSophie:hover
+        .btnGalkir95:hover
         { 
             linear-gradient(to bottom, #b69471 0%,#9f764d 22%,#8f6133 30%,#6c4d2d 100%);
             color: white
@@ -724,7 +724,7 @@ else {
         var borderColor = "#3e4147";
         var headerColor = "#202225";
         var titleColor = "#ffffdf";
-        cssClassesSophie = `
+        cssClassesGalkir95 = `
             <style>
             .compact * { font-size: 90% !important; }
             .compact table.vis td { padding: 2px !important; }
@@ -742,11 +742,11 @@ else {
             font-weight: bold;
             color: white;
             }
-            .btnSophie
+            .btnGalkir95
             {
                 background-image: linear-gradient(#6e7178 0%, #36393f 30%, #202225 80%, black 100%);
             }
-            .btnSophie:hover
+            .btnGalkir95:hover
             { 
                 background-image: linear-gradient(#7b7e85 0%, #40444a 30%, #393c40 80%, #171717 100%);
             }
@@ -773,8 +773,8 @@ else {
 }
 
 //adding UI classes to page
-$("#contentContainer").eq(0).prepend(cssClassesSophie);
-$("#mobileHeader").eq(0).prepend(cssClassesSophie);
+$("#contentContainer").eq(0).prepend(cssClassesGalkir95);
+$("#mobileHeader").eq(0).prepend(cssClassesGalkir95);
 
 $.getAll = function (
     urls, // array of URLs
@@ -821,7 +821,7 @@ $.getAll = function (
 //get scavenging data that is in play for this world, every world has different exponent, factor, and initial seconds. Also getting the URLS of each mass scavenging page
 //we can limit the amount of pages we need to call this way, since the mass scavenging pages have all the data that is necessary: troopcounts, which categories per village are unlocked, and if rally point exists.
 function getData() {
-    $("#massScavengeSophie").remove();
+    $("#massScavengeGalkir95").remove();
     URLs = [];
     $.get(URLReq, function (data) {
         if ($(".paged-nav-item").length > 0) {
@@ -892,9 +892,9 @@ function getData() {
                         <button class="btn" id = "x" onclick="closeWindow('massScavengeFinal')">
                             X
                         </button>
-                        <table id="massScavengeSophieFinalTable" class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}">
+                        <table id="massScavengeGalkir95FinalTable" class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}">
                         <tr>
-                            <td colspan="10" id="massScavengeSophieTitle" style="text-align:center; width:auto; background-color:${headerColor}">
+                            <td colspan="10" id="massScavengeGalkir95Title" style="text-align:center; width:auto; background-color:${headerColor}">
                                 <h3>
                                     <center style="margin:10px"><u>
                                             <font color="${titleColor}">${langShinko[7]}</font>
@@ -905,7 +905,7 @@ function getData() {
                         </tr>`;
                         for (var s = 0; s < Object.keys(squads).length; s++) {
                             //add row with new button
-                            htmlWithLaunchButtons += `<tr id="sendRow${s}" style="text-align:center; width:auto; background-color:${backgroundColor}"><td style="text-align:center; width:auto; background-color:${backgroundColor}"><center><input type="button"  class="btn btnSophie" id="sendMass" onclick="sendGroup(${s},false)" value="${langShinko[8]}${s + 1}"></center></td><td style="text-align:center; width:auto; background-color:${backgroundColor}"><center><input type="button"  class="btn btn-pp btn-send-premium" id="sendMassPremium" onclick="sendGroup(${s},true)" value="${langShinko[8]}${s + 1} С PREMIUM" style="display:none"></center></td></tr>`
+                            htmlWithLaunchButtons += `<tr id="sendRow${s}" style="text-align:center; width:auto; background-color:${backgroundColor}"><td style="text-align:center; width:auto; background-color:${backgroundColor}"><center><input type="button"  class="btn btnGalkir95" id="sendMass" onclick="sendGroup(${s},false)" value="${langShinko[8]}${s + 1}"></center></td><td style="text-align:center; width:auto; background-color:${backgroundColor}"><center><input type="button"  class="btn btn-pp btn-send-premium" id="sendMassPremium" onclick="sendGroup(${s},true)" value="${langShinko[8]}${s + 1} С PREMIUM" style="display:none"></center></td></tr>`
                         }
                         htmlWithLaunchButtons += "</table></div>"
                         //appending to page
@@ -933,15 +933,15 @@ function getData() {
 
 //first UI, will always open as soon as you run the script.
 html = `
-<div id="massScavengeSophie" class="ui-widget-content" style="width:580px;background-color:${backgroundColor};cursor:move;z-index:50;max-height:85vh;overflow-y:auto;">
+<div id="massScavengeGalkir95" class="ui-widget-content" style="width:580px;background-color:${backgroundColor};cursor:move;z-index:50;max-height:85vh;overflow-y:auto;">
 
-<button class="btn" id = "x" onclick="closeWindow('massScavengeSophie')">
+<button class="btn" id = "x" onclick="closeWindow('massScavengeGalkir95')">
             X
         </button>
-        <button class="btn btnSophie" id="toggleLogUIPanelBtn" style="position:absolute; right:60px; top:0px; width:60px; height:30px;">Логи</button>
-    <table id="massScavengeSophieTable" class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}">
+        <button class="btn btnGalkir95" id="toggleLogUIPanelBtn" style="position:absolute; right:60px; top:0px; width:60px; height:30px;">Логи</button>
+    <table id="massScavengeGalkir95Table" class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}">
         <tr>
-            <td colspan="10" id="massScavengeSophieTitle" style="text-align:center; width:auto; background-color:${headerColor}">
+            <td colspan="10" id="massScavengeGalkir95Title" style="text-align:center; width:auto; background-color:${headerColor}">
                 <h4 style="margin:5px">
                     <center><u>
                             <font color="${titleColor}">${langShinko[0]}</font>
@@ -1111,7 +1111,7 @@ html = `
                     </textarea>
                 </td>
                 <td style="text-align:center; width:30%; background-color:${backgroundColor}; padding:5px; vertical-align: middle;">
-                    <input type="button" class="btn btnSophie" id="saveFarmCoordsBtn" value="Сохранить" style="margin: 2px; font-size:11px; padding:3px 8px;">
+                    <input type="button" class="btn btnGalkir95" id="saveFarmCoordsBtn" value="Сохранить" style="margin: 2px; font-size:11px; padding:3px 8px;">
                 </td>
             </tr>
         </tbody>
@@ -1120,17 +1120,14 @@ html = `
     <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
         <tr style="text-align:center; width:auto; background-color:${headerColor}">
             <td style="text-align:center; width:50%; background-color:${backgroundColor}; padding:3px;">
-                <center><input type="button" class="btn btnSophie" id="reset" onclick="resetSettings()" value="Сброс" style="font-size:11px; padding:4px 10px;"></center>
+                <center><input type="button" class="btn btnGalkir95" id="reset" onclick="resetSettings()" value="Сброс" style="font-size:11px; padding:4px 10px;"></center>
             </td>
             <td style="text-align:center; width:50%; background-color:${backgroundColor}; padding:3px;">
-                <center><input type="button" class="btn btnSophie" id="sendMass" onclick="readyToSend()" value="${langShinko[5]}" style="font-size:11px; padding:4px 10px;"></center>
+                <center><input type="button" class="btn btnGalkir95" id="sendMass" onclick="readyToSend()" value="${langShinko[5]}" style="font-size:11px; padding:4px 10px;"></center>
             </td>
         </tr>
     </table>
 
-    <div style="text-align:center; margin:5px 0;">
-        <img id="sophieImg" class="tooltip-delayed" title="Sophie -Shinko to Kuma-" src="https://dl.dropboxusercontent.com/s/bxoyga8wa6yuuz4/sophie2.gif" style="cursor:help; height:40px;">
-    </div>
 
     <div style="text-align:center;">
         <p style="margin:2px; font-size:11px;">
@@ -1142,12 +1139,10 @@ html = `
 
 $(".maincell").eq(0).prepend(html);
 $("#mobileContent").eq(0).prepend(html);
-if (game_data.locale == "ar_AE") {
-    $("#sophieImg").attr("src", "https://media2.giphy.com/media/qYr8p3Dzbet5S/giphy.gif");
-}
+
 if (is_mobile == false) {
-    $("#massScavengeSophie").css("position", "fixed");
-    $("#massScavengeSophie").draggable();
+    $("#massScavengeGalkir95").css("position", "fixed");
+    $("#massScavengeGalkir95").draggable();
 
 }
 
@@ -1168,15 +1163,15 @@ try {
 
 try {
     var compactSaved = localStorage.getItem('compactMode') === 'true';
-    if (compactSaved) { $('#massScavengeSophie').addClass('compact'); }
+    if (compactSaved) { $('#massScavengeGalkir95').addClass('compact'); }
     $('#compactToggle').prop('checked', compactSaved);
     $('#compactToggle').on('change', function(){
         var enabled = $(this).is(':checked');
         localStorage.setItem('compactMode', enabled ? 'true' : 'false');
         if (enabled) {
-            $('#massScavengeSophie').addClass('compact');
+            $('#massScavengeGalkir95').addClass('compact');
         } else {
-            $('#massScavengeSophie').removeClass('compact');
+            $('#massScavengeGalkir95').removeClass('compact');
         }
     });
 } catch(e) {}
