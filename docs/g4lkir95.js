@@ -966,7 +966,7 @@ html = `
             <td style="text-align:center;background-color:${headerColor}" colspan="15">
                 <h5 style="margin:3px">
                     <center><u>
-                            <font color="${titleColor}">${langShinko[1]}</font>
+                            <font color="${titleColor}">Выбор войск</font>
                         </u></center>
                 </h5>
             </td>
@@ -981,7 +981,7 @@ html = `
     <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
         <tbody>
             <tr style="background-color:${backgroundColor}">
-                <td style="text-align:center;background-color:${headerColor}" colspan="4">
+                <td style="text-align:center;background-color:${headerColor}" colspan="2">
                     <h5 style="margin:3px">
                         <center><u>
                                 <font color="${titleColor}">${langShinko[2]}</font>
@@ -989,76 +989,26 @@ html = `
                     </h5>
                 </td>
             </tr>
-            <tr id="categories" style="text-align:center; width:auto; background-color:${headerColor}">
-                <td style="text-align:center; width:auto; background-color:${headerColor};padding: 3px;">
-                    <font color="${titleColor}" style="font-size:12px">${categoryNames[1].name}</font>
-                </td>
-                <td style="text-align:center; width:auto; background-color:${headerColor};padding: 3px;">
-                    <font color="${titleColor}" style="font-size:12px">${categoryNames[2].name}</font>
-                </td>
-                <td style="text-align:center; width:auto; background-color:${headerColor};padding: 3px;">
-                    <font color="${titleColor}" style="font-size:12px">${categoryNames[3].name}</font>
-                </td>
-                <td style="text-align:center; width:auto; background-color:${headerColor};padding: 3px;">
-                    <font color="${titleColor}" style="font-size:12px">${categoryNames[4].name}</font>
-                </td>
+            <tr>
+                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:12px;">${categoryNames[1].name}</td>
+                <td style="background-color:${backgroundColor}; padding:4px; text-align:right;"><input type="checkbox" ID="category1" name="cat1"></td>
             </tr>
             <tr>
-                <td style="text-align:center; width:auto; background-color:${backgroundColor}">
-                    <center><input type="checkbox" ID="category1" name="cat1"></center>
-                </td>
-                <td style="text-align:center; width:auto; background-color:${backgroundColor}">
-                    <center><input type="checkbox" ID="category2" name="cat2"></center>
-                </td>
-                <td style="text-align:center; width:auto; background-color:${backgroundColor}">
-                    <center><input type="checkbox" ID="category3" name="cat3"></center>
-                </td>
-                <td style="text-align:center; width:auto; background-color:${backgroundColor}">
-                    <center><input type="checkbox" ID="category4" name="cat4"></center>
-                </td>
+                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:12px;">${categoryNames[2].name}</td>
+                <td style="background-color:${backgroundColor}; padding:4px; text-align:right;"><input type="checkbox" ID="category2" name="cat2"></td>
+            </tr>
+            <tr>
+                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:12px;">${categoryNames[3].name}</td>
+                <td style="background-color:${backgroundColor}; padding:4px; text-align:right;"><input type="checkbox" ID="category3" name="cat3"></td>
+            </tr>
+            <tr>
+                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:12px;">${categoryNames[4].name}</td>
+                <td style="background-color:${backgroundColor}; padding:4px; text-align:right;"><input type="checkbox" ID="category4" name="cat4"></td>
             </tr>
         </tbody>
     </table>
     
-    <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
-        <tr id="runtimesTitle" style="text-align:center; width:auto; background-color:${headerColor}">
-            <td colspan="3" style="text-align:center; width:auto; background-color:${headerColor}">
-                <center style="margin:3px">
-                    <font color="${titleColor}" style="font-size:12px">${langShinko[3]}</font>
-                </center>
-            </td>
-        </tr>
-        <tr id="runtimes" style="text-align:center; width:auto; background-color:${headerColor}">
-            <td style="background-color:${headerColor};"></td>
-            <td style="text-align:center; width:auto; background-color:${headerColor};padding: 3px;">
-                <font color="${titleColor}" style="font-size:11px">Атакующие деревни</font>
-            </td>
-            <td style="text-align:center; width:auto; background-color:${headerColor};padding: 3px;">
-                <font color="${titleColor}" style="font-size:11px">Защитные деревни</font>
-            </td>
-        </tr>
-        <tr>
-            <td style="width:20px;background-color:${backgroundColor}; padding:2px;"><input type="radio" ID="timeSelectorDate" name="timeSelector" ></td>
-            <td style="text-align:center; width:auto; background-color:${backgroundColor}; padding:2px;">
-                <input type="date" id="offDay" name="offDay" value="${setDayToField(runTimes.off)}" style="font-size:11px; width:48%">
-                <input type="time" id="offTime" name="offTime" value="${setTimeToField(runTimes.off)}" style="font-size:11px; width:48%">
-            </td>
-            <td style="text-align:center; width:auto; background-color:${backgroundColor}; padding:2px;">
-                <input type="date" id="defDay" name="defDay" value="${setDayToField(runTimes.def)}" style="font-size:11px; width:48%">
-                <input type="time" id="defTime" name="defTime" value="${setTimeToField(runTimes.def)}" style="font-size:11px; width:48%">
-            </td>
-        </tr>
-        <tr>
-            <td style="width:20px;background-color:${backgroundColor}; padding:2px;"><input type="radio" ID="timeSelectorHours" name="timeSelector" ></td>
-            <td style="text-align:center; width:auto; background-color:${backgroundColor}; padding:2px;"><input type="text" class="runTime_off" style="background-color:${backgroundColor};color:${titleColor}; font-size:11px; width:90%" value="${runTimes['off']}" onclick="this.select();"></td>
-            <td style="text-align:center; width:auto; background-color:${backgroundColor}; padding:2px;"><input type="text" class="runTime_def" style="background-color:${backgroundColor};color:${titleColor}; font-size:11px; width:90%" value="${runTimes['def']}" onclick="this.select();"></td>
-        </tr>
-        <tr>
-            <td style="width:20px;background-color:${backgroundColor}; padding:2px;"></td>
-            <td style="text-align:center; width:auto; background-color:${backgroundColor}; padding:2px;"><font color="${titleColor}" style="font-size:10px"><span id="offDisplay"></span></font></td>
-            <td style="text-align:center; width:auto; background-color:${backgroundColor}; padding:2px;"><font color="${titleColor}" style="font-size:10px"><span id="defDisplay"></span></font></td>
-        </tr>
-    </table>
+    <!-- Время скрыто: фиксировано 4 часа для off/def -->
     
     <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
         <tr id="settingPriorityTitle" style="text-align:center; width:auto; background-color:${headerColor}">
@@ -1082,33 +1032,7 @@ html = `
         </tr>
     </table>
     
-    <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
-        <tbody>
-            <tr style="background-color:${backgroundColor}">
-                <td style="text-align:center;background-color:${headerColor}" colspan="2">
-                    <h5 style="margin:3px">
-                        <center><u>
-                                <font color="${titleColor}">Фарм-деревни (легкая кавалерия остается дома)</font>
-                            </u></center>
-                    </h5>
-                </td>
-            </tr>
-            <tr style="text-align:center; width:auto; background-color:${backgroundColor}">
-                <td style="text-align:center; width:70%; background-color:${backgroundColor}; padding:5px;">
-                    <textarea 
-                        id="farmCoords" 
-                        class="form-control" 
-                        placeholder="Координаты: 123|456 789|012"
-                        rows="2"
-                        style="width: 100%; background-color: #202225; color: #ffffdf; border: 1px solid #3e4147; padding: 3px; resize: vertical; font-family: inherit; font-size:11px;">
-                    </textarea>
-                </td>
-                <td style="text-align:center; width:30%; background-color:${backgroundColor}; padding:5px; vertical-align: middle;">
-                    <input type="button" class="btn btnGalkir95" id="saveFarmCoordsBtn" value="Сохранить" style="margin: 2px; font-size:11px; padding:3px 8px;">
-                </td>
-            </tr>
-        </tbody>
-    </table>
+    <!-- Блок Фарм-деревни удалён из интерфейса -->
     
     <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
         <tr style="text-align:center; width:auto; background-color:${headerColor}">
@@ -1159,73 +1083,19 @@ try {
     });
 } catch(e) {}
 
-$("#offDisplay")[0].innerText = fancyTimeFormat(runTimes.off * 3600);
-$("#defDisplay")[0].innerText = fancyTimeFormat(runTimes.def * 3600);
-if (tempElementSelection == "Date") {
-    $(`#timeSelectorDate`).prop("checked", true);
-    selectType("Date");
-    updateTimers();
-}
-else {
-    $(`#timeSelectorHours`).prop("checked", true);
-    selectType("Hours");
-    updateTimers();
-}
+// Время по умолчанию: фиксировано 4 часа для off/def
+runTimes = { off: 4, def: 4 };
+localStorage.setItem("runTimes", JSON.stringify(runTimes));
 
-// Загружаем сохраненные farmCoords
-var savedFarmCoords = localStorage.getItem("farmCoords");
-if (savedFarmCoords) {
-    document.getElementById('farmCoords').value = savedFarmCoords;
-}
+// Блок Фарм-деревни удалён — сохранение/обработчики не требуются
 
-// Вешаем обработчик на кнопку Save
-$('#saveFarmCoordsBtn').click(function() {
-    cleanCoords('farmCoords');
-    var farmCoordsValue = document.getElementById('farmCoords').value;
-    localStorage.setItem("farmCoords", farmCoordsValue);
-    console.log("Farm coords saved to localStorage");
-});
-
-$("#offDay")[0].addEventListener("input", function () {
-    updateTimers();
-}, false)
-
-$("#defDay")[0].addEventListener("input", function () {
-    updateTimers();
-}, false)
-
-$("#offTime")[0].addEventListener("input", function () {
-    updateTimers();
-}, false)
-
-$("#defTime")[0].addEventListener("input", function () {
-    updateTimers();
-}, false)
-
-$(".runTime_off")[0].addEventListener("input", function () {
-    updateTimers();
-}, false)
-
-$(".runTime_def")[0].addEventListener("input", function () {
-    updateTimers();
-}, false)
-
-$("#timeSelectorDate")[0].addEventListener("input", function () {
-    selectType('Date');
-    updateTimers();
-}, false)
-
-$("#timeSelectorHours")[0].addEventListener("input", function () {
-    selectType('Hours');
-    updateTimers();
-}, false)
+// Время фиксировано, обработчики таймеров отключены
 
 //create checkboxes and add them to the UI
 for (var i = 0; i < sendOrder.length; i++) {
     $("#unitsGrid").eq(0).append(`
     <div class="unit-item">
         <div class="unit-header">
-            <img class="unit-img" src="https://dsen.innogamescdn.com/asset/cf2959e7/graphic/unit/unit_${sendOrder[i]}.png" title="${sendOrder[i]}" alt="" style="height:20px;">
             <span class="unit-name">${sendOrder[i]}</span>
             <input type="checkbox" class="unit-checkbox" ID="${sendOrder[i]}" name="${sendOrder[i]}">
         </div>
@@ -1234,15 +1104,7 @@ for (var i = 0; i < sendOrder.length; i++) {
             <input type="text" class="unit-backup" ID="${sendOrder[i]}Backup" name="${sendOrder[i]}" value="${keepHome[sendOrder[i]]}" size="3">
         </div>
     </div>`);
-    $("#unitsGrid").sortable({
-        items: ".unit-item",
-        axis: "x",
-        revert: 100,
-        containment: "parent",
-        forceHelperSize: true,
-        delay: 100,
-        scroll: false
-    }).disableSelection();
+    // сортировка отключена — фиксированный порядок юнитов
 
     if (prioritiseHighCat == true) {
         console.log('setting high priority cat')
@@ -1298,31 +1160,11 @@ function readyToSend() {
     });
     vLog("[readyToSend] Категории (селекторы #category1..#category4) =>", JSON.parse(JSON.stringify(enabledCategories)));
 
-    if ($("#timeSelectorDate")[0].checked == true) {
-        localStorage.setItem("timeElement", "Date");
-        var offDaySel = "#offDay", offTimeSel="#offTime", defDaySel="#defDay", defTimeSel="#defTime";
-        logElementInfo(offDaySel, 'readyToSend: чтение поля даты OFF');
-        logElementInfo(offTimeSel, 'readyToSend: чтение поля времени OFF');
-        logElementInfo(defDaySel, 'readyToSend: чтение поля даты DEF');
-        logElementInfo(defTimeSel, 'readyToSend: чтение поля времени DEF');
-        var offDay = $(offDaySel).val();
-        var offTime = $(offTimeSel).val();
-        var defDay = $(defDaySel).val();
-        var defTime = $(defTimeSel).val();
-        vLog(`[readyToSend] Режим времени=Date; поля (#offDay,#offTime,#defDay,#defTime) =>`, { offDay, offTime, defDay, defTime });
-        time.off = Date.parse(offDay.replace(/-/g, "/") + " " + offTime);
-        time.def = Date.parse(defDay.replace(/-/g, "/") + " " + defTime);
-        time.off = (time.off - serverDate) / 1000 / 3600;
-        time.def = (time.def - serverDate) / 1000 / 3600;
-    }
-    else {
-        localStorage.setItem("timeElement", "Hours");
-        logElementInfo('.runTime_off', 'readyToSend: чтение поля часов OFF (.runTime_off)');
-        logElementInfo('.runTime_def', 'readyToSend: чтение поля часов DEF (.runTime_def)');
-        time.off = $('.runTime_off').val();
-        time.def = $('.runTime_def').val();
-        vLog(`[readyToSend] Режим времени=Hours; поля (.runTime_off,.runTime_def) =>`, { off: time.off, def: time.def });
-    }
+    // Время фиксировано: 4 часа для OFF и DEF
+    localStorage.setItem("timeElement", "Hours");
+    time.off = 4;
+    time.def = 4;
+    vLog(`[readyToSend] Время фиксировано: off=4, def=4 (часы)`);
 
     vLog(`[readyToSend] Итог времени (часы): off=${time.off}, def=${time.def}`);
     if (time.off > 24 || time.def > 24) {
@@ -1337,11 +1179,8 @@ function readyToSend() {
         prioritiseHighCat = false;
     }
 
-    sendOrder = [];
-    for (var k = 0; k < $("#unitsGrid :checkbox").length; k++) {
-        sendOrder.push($("#unitsGrid :checkbox")[k].name)
-    }
-    vLog("[readyToSend] Порядок юнитов после сортировки (источник '#imgRow :checkbox[name]'):", JSON.parse(JSON.stringify(sendOrder)));
+    // Фиксированный порядок юнитов — не меняем sendOrder
+    vLog("[readyToSend] Фиксированный порядок юнитов (без перетаскивания):", JSON.parse(JSON.stringify(sendOrder))); 
     vLog(`[readyToSend] Режим приоритета: prioritiseHighCat=${prioritiseHighCat}`);
     vLog("[readyToSend] Сохраняем в localStorage ключи: troopTypeEnabled, keepHome, categoryEnabled, prioritiseHighCat, sendOrder, runTimes");
     localStorage.setItem("troopTypeEnabled", JSON.stringify(troopTypeEnabled));
@@ -1419,34 +1258,14 @@ function calculateHaulCategories(data) {
         vGroup(`[calc] Деревня ${data.village_name} (#${data.village_id}) — возможно собирать`);
         vLog(`[calc] Параметры мира: duration_factor=${duration_factor}, duration_exponent=${duration_exponent}, duration_initial_seconds=${duration_initial_seconds}`);
 		
-        // ==== ИСПРАВЛЕННЫЙ КОД: Проверяем по localStorage ====
-        var savedFarmCoords = localStorage.getItem("farmCoords");
-        var farmCoords = [];
+        // Фарм-логика отключена: не игнорируем light нигде
         var isFarmVillage = false;
-        
-        if (savedFarmCoords && savedFarmCoords.trim() !== "") {
-            farmCoords = savedFarmCoords.split(' ');
-            var currentVillageCoords = data.village_name.match(/[0-9]{3}\|[0-9]{3}/);
-            
-            if (currentVillageCoords) {
-                currentVillageCoords = currentVillageCoords[0];
-                isFarmVillage = farmCoords.includes(currentVillageCoords);
-                
-                vLog(`[calc] Проверка фарм-деревень: coords текущей=${currentVillageCoords}, список=`, farmCoords);
-                if (isFarmVillage) vLog(`[calc] В списке фарма -> light будет игнорироваться`);
-            }
-        }
-        // ==== КОНЕЦ ИСПРАВЛЕННОГО КОДА ====
 		
         var troopsAllowed = {};
         vGroup('[calc] troopsAllowed: расчет доступных юнитов с учетом чекбоксов и "Оставить дома"');
         for (key in troopTypeEnabled) {
             if (troopTypeEnabled[key] == true) {
-                // ==== ИЗМЕНЕНИЕ: Для farm-деревень игнорируем light ====
-                if (isFarmVillage && key == "light") {
-                    troopsAllowed[key] = 0; // Игнорируем легких коней
-                    vLog(`[calc] ${key}: чекбокс=on, но ферма=true => 0 (игнорируем light)`);
-                } else if (data.unit_counts_home[key] - keepHome[key] > 0) {
+                if (data.unit_counts_home[key] - keepHome[key] > 0) {
                     troopsAllowed[key] = data.unit_counts_home[key] - keepHome[key];
                     vLog(`[calc] ${key}: чекбокс=on, доступно=${data.unit_counts_home[key]}, оставить_дома=${keepHome[key]} => ${troopsAllowed[key]}`);
                 }
