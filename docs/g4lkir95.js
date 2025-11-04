@@ -59,6 +59,39 @@ if (typeof window.vGroupEnd === 'undefined') {
     };
 }
 
+// Detailed element descriptor for future maintenance
+function logElementInfo(selector, contextLabel, extra) {
+    try {
+        var $els = $(selector);
+        var count = $els.length;
+        var details = { selector: selector, found: count };
+        if (count > 0) {
+            var el = $els[0];
+            details.tag = el.tagName;
+            details.id = el.id || null;
+            details.name = el.name || null;
+            details.type = el.type || null;
+            details.disabled = !!el.disabled;
+            // Values depending on element type
+            if (el.type === 'checkbox' || el.type === 'radio') {
+                details.checked = !!el.checked;
+            }
+            if (typeof el.value !== 'undefined') {
+                details.value = el.value;
+            }
+            // Store a shortened version of outerHTML to see structure
+            try {
+                var html = el.outerHTML || '';
+                details.outerHTML = html.length > 300 ? html.slice(0, 300) + '…' : html;
+            } catch (e) {}
+        }
+        if (extra) details.extra = extra;
+        vLog(`[el] ${contextLabel}`, details);
+    } catch (e) {
+        try { vLog(`[el] ${contextLabel} (selector=${selector}) — error:`, String(e)); } catch (e2) {}
+    }
+}
+
 // ===== UI LOG PANEL =====
 if (typeof window.UILOG_ENABLED === 'undefined') {
     var UILOG_ENABLED = true;
@@ -377,6 +410,15 @@ var time = {
     'def': 0
 };
 
+// THEME: load user-selected theme
+var uiTheme = localStorage.getItem('uiTheme');
+if (uiTheme) {
+    colors = uiTheme;
+} else {
+    colors = 'modernDark';
+    localStorage.setItem('uiTheme', colors);
+}
+
 //colors for UI
 if (typeof colors == 'undefined') {
     var backgroundColor = "#36393f";
@@ -385,6 +427,9 @@ if (typeof colors == 'undefined') {
     var titleColor = "#ffffdf";
     cssClassesSophie = `
 <style>
+.compact * { font-size: 90% !important; }
+.compact table.vis td { padding: 2px !important; }
+.compact input, .compact textarea, .compact select { padding: 2px 4px !important; }
 .sophRowA {
 background-color: #32353b;
 color: white;
@@ -467,6 +512,32 @@ else {
             width: 30px;
             height: 30px;
         }
+        </style>`
+    }
+    else if (colors == 'modernDark') {
+        // modern dark theme (compact-friendly)
+        var colors = {
+            "backgroundColor": "#1f2430",
+            "borderColor": "#2d3446",
+            "headerColor": "#151a24",
+            "titleColor": "#e6edf3"
+        };
+        var backgroundColor = colors.backgroundColor;
+        var borderColor = colors.borderColor;
+        var headerColor = colors.headerColor;
+        var titleColor = colors.titleColor;
+        cssClassesSophie = `
+        <style>
+        .compact * { font-size: 90% !important; }
+        .compact table.vis td { padding: 2px !important; }
+        .compact input, .compact textarea, .compact select { padding: 2px 4px !important; }
+        .sophRowA { background-color: #232a36; color: #e6edf3; }
+        .sophRowB { background-color: #1f2430; color: #e6edf3; }
+        .sophHeader { background-color: #151a24; font-weight: bold; color: #e6edf3; }
+        .btnSophie { background-image: linear-gradient(#3a4254 0%, #2a3242 50%, #151a24 100%); color:#e6edf3 }
+        .btnSophie:hover { background-image: linear-gradient(#4a556b 0%, #39445a 50%, #1b2230 100%); }
+        #x { position: absolute; background: #ab2b2b; color: white; top: 0px; right: 0px; width: 30px; height: 30px; }
+        #cog { position: absolute; background: #232a36; color: white; top: 0px; right: 30px; width: 30px; height: 30px; }
         </style>`
     }
     else if (colors == "swedish") {
@@ -625,6 +696,9 @@ else {
         var titleColor = "#ffffdf";
         cssClassesSophie = `
             <style>
+            .compact * { font-size: 90% !important; }
+            .compact table.vis td { padding: 2px !important; }
+            .compact input, .compact textarea, .compact select { padding: 2px 4px !important; }
             .sophRowA {
             background-color: #32353b;
             color: white;
@@ -846,6 +920,27 @@ html = `
                 </h4>
             </td>
         </tr>
+        <tr>
+            <td colspan="10" style="background-color:${backgroundColor}; padding:4px;">
+                <div style="display:flex; gap:6px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+                    <div>
+                        <label style="color:${titleColor}; font-size:11px; margin-right:4px;">Тема</label>
+                        <select id="themeSelect" style="font-size:11px; background-color:${backgroundColor}; color:${titleColor}; border:1px solid ${borderColor};">
+                            <option value="modernDark">Modern Dark</option>
+                            <option value="TW">TW</option>
+                            <option value="minimalistGray">Minimal Gray</option>
+                            <option value="pink">Pink</option>
+                            <option value="swedish">Swedish</option>
+                            <option value="standard">Standard</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label style="color:${titleColor}; font-size:11px; margin-right:4px;">Компактный режим</label>
+                        <input type="checkbox" id="compactToggle" />
+                    </div>
+                </div>
+            </td>
+        </tr>
         <tr style="background-color:${backgroundColor}">
             <td style="text-align:center;background-color:${headerColor}" colspan="15">
                 <h5 style="margin:3px">
@@ -1029,6 +1124,32 @@ if (is_mobile == false) {
 uiLogEnsurePanel();
 $("#toggleLogUIPanelBtn").on('click', function(){ uiLogToggle(); });
 
+// Theme select & compact mode handlers
+try {
+    var savedTheme = localStorage.getItem('uiTheme') || 'modernDark';
+    $('#themeSelect').val(savedTheme);
+    $('#themeSelect').on('change', function(){
+        var val = $(this).val();
+        localStorage.setItem('uiTheme', val);
+        window.location.reload();
+    });
+} catch(e) {}
+
+try {
+    var compactSaved = localStorage.getItem('compactMode') === 'true';
+    if (compactSaved) { $('#massScavengeSophie').addClass('compact'); }
+    $('#compactToggle').prop('checked', compactSaved);
+    $('#compactToggle').on('change', function(){
+        var enabled = $(this).is(':checked');
+        localStorage.setItem('compactMode', enabled ? 'true' : 'false');
+        if (enabled) {
+            $('#massScavengeSophie').addClass('compact');
+        } else {
+            $('#massScavengeSophie').removeClass('compact');
+        }
+    });
+} catch(e) {}
+
 $("#offDisplay")[0].innerText = fancyTimeFormat(runTimes.off * 3600);
 $("#defDisplay")[0].innerText = fancyTimeFormat(runTimes.def * 3600);
 if (tempElementSelection == "Date") {
@@ -1161,29 +1282,37 @@ function readyToSend() {
     vLog("[readyToSend] Порядок юнитов (источник '#imgRow :checkbox[name]'):", sendOrder);
     for (var i = 0; i < sendOrder.length; i++) {
         var selectorCheck = `:checkbox#${sendOrder[i]}`;
+        logElementInfo(selectorCheck, `readyToSend: чтение чекбокса юнита ${sendOrder[i]}`);
         var isChecked = $(`:checkbox#${sendOrder[i]}`).is(":checked");
         troopTypeEnabled[sendOrder[i]] = isChecked;
         vLog(`[readyToSend] Чекбокс юнита ${sendOrder[i]} (${selectorCheck}) => ${isChecked}`);
     }
     for (var i = 0; i < sendOrder.length; i++) {
         var selectorBackup = `#${sendOrder[i]}Backup`;
+        logElementInfo(selectorBackup, `readyToSend: чтение поля 'Оставить дома' для ${sendOrder[i]}`);
         var backupVal = $(`#${sendOrder[i]}Backup`).val();
         keepHome[sendOrder[i]] = backupVal;
         vLog(`[readyToSend] Поле 'Оставить дома' для ${sendOrder[i]} (${selectorBackup}) => ${backupVal}`);
     }
     vLog("[readyToSend] Итог включенных типов юнитов:", JSON.parse(JSON.stringify(troopTypeEnabled)));
-    enabledCategories.push($("#category1").is(":checked"));
-    enabledCategories.push($("#category2").is(":checked"));
-    enabledCategories.push($("#category3").is(":checked"));
-    enabledCategories.push($("#category4").is(":checked"));
+    [1,2,3,4].forEach(function(ci){
+        var sel = `#category${ci}`;
+        logElementInfo(sel, `readyToSend: чтение чекбокса категории ${ci}`);
+        enabledCategories.push($(sel).is(":checked"));
+    });
     vLog("[readyToSend] Категории (селекторы #category1..#category4) =>", JSON.parse(JSON.stringify(enabledCategories)));
 
     if ($("#timeSelectorDate")[0].checked == true) {
         localStorage.setItem("timeElement", "Date");
-        var offDay = $("#offDay").val();
-        var offTime = $("#offTime").val();
-        var defDay = $("#defDay").val();
-        var defTime = $("#defTime").val();
+        var offDaySel = "#offDay", offTimeSel="#offTime", defDaySel="#defDay", defTimeSel="#defTime";
+        logElementInfo(offDaySel, 'readyToSend: чтение поля даты OFF');
+        logElementInfo(offTimeSel, 'readyToSend: чтение поля времени OFF');
+        logElementInfo(defDaySel, 'readyToSend: чтение поля даты DEF');
+        logElementInfo(defTimeSel, 'readyToSend: чтение поля времени DEF');
+        var offDay = $(offDaySel).val();
+        var offTime = $(offTimeSel).val();
+        var defDay = $(defDaySel).val();
+        var defTime = $(defTimeSel).val();
         vLog(`[readyToSend] Режим времени=Date; поля (#offDay,#offTime,#defDay,#defTime) =>`, { offDay, offTime, defDay, defTime });
         time.off = Date.parse(offDay.replace(/-/g, "/") + " " + offTime);
         time.def = Date.parse(defDay.replace(/-/g, "/") + " " + defTime);
@@ -1192,6 +1321,8 @@ function readyToSend() {
     }
     else {
         localStorage.setItem("timeElement", "Hours");
+        logElementInfo('.runTime_off', 'readyToSend: чтение поля часов OFF (.runTime_off)');
+        logElementInfo('.runTime_def', 'readyToSend: чтение поля часов DEF (.runTime_def)');
         time.off = $('.runTime_off').val();
         time.def = $('.runTime_def').val();
         vLog(`[readyToSend] Режим времени=Hours; поля (.runTime_off,.runTime_def) =>`, { off: time.off, def: time.def });
@@ -1453,6 +1584,7 @@ function enableCorrectTroopTypes() {
                 var sel = `#${worldUnits[i]}`;
                 $(sel).prop("checked", true);
                 vLog(`[enableCorrectTroopTypes] Устанавливаем чекбокс ${sel} => checked=true`);
+                logElementInfo(sel, 'enableCorrectTroopTypes: после установки checked=true');
             }
         }
     }
@@ -1461,6 +1593,7 @@ function enableCorrectTroopTypes() {
             var catSel = `#category${i + 1}`;
             $(catSel).prop("checked", true);
             vLog(`[enableCorrectTroopTypes] Устанавливаем чекбокс категории ${catSel} => checked=true`);
+            logElementInfo(catSel, 'enableCorrectTroopTypes: после установки checked=true');
         }
     }
 }
@@ -1663,6 +1796,7 @@ function selectType(type) {
                 $(".runTime_off").prop("disabled", true);
                 $(".runTime_def").prop("disabled", true);
                 vLog("[selectType:Hours] enable #offDay,#defDay,#offTime,#defTime; disable .runTime_off,.runTime_def");
+                ['#offDay','#defDay','#offTime','#defTime','.runTime_off','.runTime_def'].forEach(function(s){ logElementInfo(s, 'selectType:Hours состояние поля'); });
             }
             else {
                 $("#offDay").prop("disabled", true);
@@ -1672,6 +1806,7 @@ function selectType(type) {
                 $(".runTime_off").eq(0).removeAttr('disabled');
                 $(".runTime_def").eq(0).removeAttr('disabled');
                 vLog("[selectType:Hours] disable #offDay,#defDay,#offTime,#defTime; enable .runTime_off,.runTime_def");
+                ['#offDay','#defDay','#offTime','#defTime','.runTime_off','.runTime_def'].forEach(function(s){ logElementInfo(s, 'selectType:Hours состояние поля'); });
             }
             break;
         case 'Date':
@@ -1683,6 +1818,7 @@ function selectType(type) {
                 $(".runTime_off").eq(0).removeAttr('disabled');
                 $(".runTime_def").eq(0).removeAttr('disabled');
                 vLog("[selectType:Date] disable #offDay,#defDay,#offTime,#defTime; enable .runTime_off,.runTime_def");
+                ['#offDay','#defDay','#offTime','#defTime','.runTime_off','.runTime_def'].forEach(function(s){ logElementInfo(s, 'selectType:Date состояние поля'); });
             }
             else {
                 $("#offDay").eq(0).removeAttr('disabled');
@@ -1692,6 +1828,7 @@ function selectType(type) {
                 $(".runTime_off").prop("disabled", true);
                 $(".runTime_def").prop("disabled", true);
                 vLog("[selectType:Date] enable #offDay,#defDay,#offTime,#defTime; disable .runTime_off,.runTime_def");
+                ['#offDay','#defDay','#offTime','#defTime','.runTime_off','.runTime_def'].forEach(function(s){ logElementInfo(s, 'selectType:Date состояние поля'); });
             }
             break;
         default:
