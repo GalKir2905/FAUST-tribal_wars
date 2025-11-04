@@ -491,7 +491,12 @@
             const scriptData = extractDataFromScripts();
             if (scriptData && scriptData.villages) {
                 addDebugLog(`Найдено деревень в JS данных: ${scriptData.villages.length}`, 'success');
-                return processScriptData(scriptData);
+                const scriptVillages = processScriptData(scriptData);
+                
+                // Если нашли деревни через JS данные, используем их
+                if (scriptVillages.length > 0) {
+                    return scriptVillages;
+                }
             }
             
             // 2. Если нет JS данных, используем DOM-поиск
@@ -528,6 +533,42 @@
             addDebugLog(`Критическая ошибка: ${e.message}`, 'error');
             return [];
         }
+    }
+
+    function emergencyFindInterface() {
+        addDebugLog('=== АВАРИЙНЫЙ ПОИСК ИНТЕРФЕЙСА ===', 'warning');
+        
+        // Ищем любой контейнер сбора
+        const containers = [
+            '.scavenge-screen-main-widget',
+            '.content-border', 
+            '.mass-scavenge-container',
+            '#scavenge_mass_content',
+            '[class*="scavenge"]',
+            '[class*="mass"]'
+        ];
+        
+        for (let selector of containers) {
+            const element = document.querySelector(selector);
+            if (element) {
+                addDebugLog(`Найден контейнер: ${selector}`, 'success');
+                return element;
+            }
+        }
+        
+        // Ищем по тексту
+        const scavengeTexts = document.querySelectorAll('*');
+        for (let element of scavengeTexts) {
+            if (element.textContent && 
+                (element.textContent.includes('собиратели') || 
+                 element.textContent.includes('scavenge') ||
+                 element.textContent.includes('Сбор ресурсов'))) {
+                addDebugLog(`Найден элемент с текстом сбора: ${element.textContent.substring(0, 50)}`, 'success');
+                return element.closest('tr') || element.closest('div') || element;
+            }
+        }
+        
+        return null;
     }
 
     function extractDataFromScripts() {
@@ -569,40 +610,139 @@
     function processScriptData(scriptData) {
         const villages = [];
         
-        scriptData.villages.forEach(villageData => {
-            const units = {};
-            
-            // Конвертируем данные юнитов из скрипта в наш формат
-            Object.keys(scriptData.units).forEach(unitKey => {
-                const unitData = scriptData.units[unitKey];
-                units[unitKey] = villageData.unit_counts_home[unitKey] || 0;
-            });
-            
-            const options = {};
-            Object.keys(scriptData.options).forEach(optionId => {
-                const optionData = scriptData.options[optionId];
-                options[optionId] = {
-                    available: !villageData.options[optionId]?.is_locked,
-                    name: optionData.name
-                };
-            });
-            
-            // Находим соответствующий DOM элемент
-            const row = findRowByVillageId(villageData.village_id);
-            
-            villages.push({
-                id: villageData.village_id,
-                name: villageData.village_name,
-                units: units,
-                options: options,
-                availableTroops: Object.values(units).reduce((sum, count) => sum + count, 0),
-                row: row,
-                rawData: villageData
-            });
-            
-            addDebugLog(`✅ ${villageData.village_name} - войск: ${villages[villages.length-1].availableTroops}`, 'success');
+        if (!scriptData || !scriptData.villages) {
+            addDebugLog('Нет данных о деревнях в скрипте', 'error');
+            return villages;
+        }
+    
+        addDebugLog(`Обработка ${scriptData.villages.length} деревень из JS данных`, 'info');
+    
+        scriptData.villages.forEach((villageData, index) => {
+            try {
+                const units = {};
+                
+                // Конвертируем данные юнитов
+                if (villageData.unit_counts_home) {
+                    Object.keys(scriptData.units).forEach(unitKey => {
+                        units[unitKey] = villageData.unit_counts_home[unitKey] || 0;
+                    });
+                } else {
+                    addDebugLog(`Нет данных о войсках для деревни ${villageData.village_name}`, 'warning');
+                    // Используем значения по умолчанию
+                    worldUnits.forEach(unit => {
+                        units[unit.id] = 100; // Значение по умолчанию
+                    });
+                }
+    
+                const options = {};
+                if (villageData.options) {
+                    Object.keys(scriptData.options).forEach(optionId => {
+                        const optionData = scriptData.options[optionId];
+                        const villageOption = villageData.options[optionId];
+                        options[optionId] = {
+                            available: villageOption ? !villageOption.is_locked : true,
+                            name: optionData.name
+                        };
+                    });
+                } else {
+                    // Все категории доступны по умолчанию
+                    Object.keys(scriptData.options).forEach(optionId => {
+                        options[optionId] = {
+                            available: true,
+                            name: scriptData.options[optionId].name
+                        };
+                    });
+                }
+
+                function findRowByVillageData(villageData, index) {
+                    const villageName = villageData.village_name;
+                    
+                    if (!villageName) {
+                        addDebugLog(`Нет названия деревни для индекса ${index}`, 'warning');
+                        return findRowByIndex(index);
+                    }
+                
+                    // Извлекаем координаты из названия
+                    const coordMatch = villageName.match(/\((\d+\|\d+)\)/);
+                    if (coordMatch) {
+                        const coords = coordMatch[0];
+                        
+                        // Ищем по координатам в тексте
+                        const allElements = document.body.getElementsByTagName('*');
+                        for (let element of allElements) {
+                            if (element.textContent && element.textContent.includes(coords)) {
+                                const row = element.closest('tr') || element.closest('.row') || element;
+                                if (row && hasScavengeControls(row)) {
+                                    addDebugLog(`Найдена строка по координатам: ${coords}`, 'success');
+                                    return row;
+                                }
+                            }
+                        }
+                    }
+                
+                    // Ищем по индексу в таблице
+                    return findRowByIndex(index);
+                }
+
+                function createVirtualRow(villageData, index) {
+                    addDebugLog(`Создание виртуальной строки для ${villageData.village_name}`, 'warning');
+                    
+                    // Создаем минимальный DOM элемент для работы
+                    const virtualRow = document.createElement('div');
+                    virtualRow.className = 'virtual-scavenge-row';
+                    virtualRow.setAttribute('data-village-id', villageData.village_id);
+                    virtualRow.setAttribute('data-village-name', villageData.village_name);
+                    virtualRow.style.display = 'none';
+                    
+                    // Добавляем на страницу
+                    document.body.appendChild(virtualRow);
+                    
+                    return virtualRow;
+                }
+
+                function findRowByIndex(index) {
+                    // Ищем все потенциальные строки с элементами управления
+                    const allRows = document.querySelectorAll('tr, .row, .village-row');
+                    const validRows = [];
+                    
+                    for (let row of allRows) {
+                        if (hasScavengeControls(row)) {
+                            validRows.push(row);
+                        }
+                    }
+                    
+                    if (index < validRows.length) {
+                        addDebugLog(`Найдена строка по индексу: ${index}`, 'success');
+                        return validRows[index];
+                    }
+                    
+                    return null;
+                }
+
+                // Находим соответствующий DOM элемент - УЛУЧШЕННЫЙ ПОИСК
+                const row = findRowByVillageData(villageData, index);
+                
+                if (!row) {
+                    addDebugLog(`Не найдена DOM строка для ${villageData.village_name}`, 'warning');
+                }
+    
+                villages.push({
+                    id: villageData.village_id || `village_${index}`,
+                    name: villageData.village_name || `Деревня ${index + 1}`,
+                    units: units,
+                    options: options,
+                    availableTroops: Object.values(units).reduce((sum, count) => sum + count, 0),
+                    row: row,
+                    rawData: villageData
+                });
+    
+                addDebugLog(`✅ ${villageData.village_name} - войск: ${villages[villages.length-1].availableTroops}`, 'success');
+    
+            } catch (e) {
+                addDebugLog(`Ошибка обработки деревни ${villageData.village_name}: ${e.message}`, 'error');
+            }
         });
-        
+    
         return villages;
     }
 
