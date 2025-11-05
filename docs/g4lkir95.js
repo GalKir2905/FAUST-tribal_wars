@@ -27,7 +27,7 @@
 // Версия скрипта (обновляется при каждом изменении)
 var SCRIPT_VERSION = "4.4";
 var SCRIPT_AUTHOR = "G4lKir95";
-var SCRIPT_CREATED = "2024";
+var SCRIPT_CREATED = "2025";
 
 // Получение времени сервера для синхронизации
 serverTimeTemp = $("#serverDate")[0].innerText + " " + $("#serverTime")[0].innerText;
