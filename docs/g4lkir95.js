@@ -1488,10 +1488,13 @@ function restoreRepeats() {
 }
 
 function sendGroup(groupNr, premiumEnabled) {
-    // Убрано подтверждение - сразу отправляем
-    var actuallyEnabled = premiumEnabled === true;
+    var actuallyEnabled = false;
     
-    if (actuallyEnabled) {
+    if (premiumEnabled == true) {
+        actuallyEnabled = confirm("Отправить с использованием premium? (Это может стоить много PP!)");
+    }
+    
+    if (actuallyEnabled == true) {
         tempSquads = squads_premium[groupNr];
     }
     else {
@@ -1743,6 +1746,9 @@ function calculateUnitsPerVillage(troopsAllowed) {
 }
 
 function resetSettings() {
+    // Очищаем повторы
+    clearRepeatState();
+    
     localStorage.removeItem("troopTypeEnabled");
     localStorage.removeItem("categoryEnabled");
     localStorage.removeItem("prioritiseHighCat");
@@ -1750,6 +1756,9 @@ function resetSettings() {
     localStorage.removeItem("runTimes");
     localStorage.removeItem("keepHome");
     localStorage.removeItem("farmCoords");
+    localStorage.removeItem("repeatState");
+    // importantLogs оставляем - они могут быть полезны для истории
+    
     UI.BanneredRewardMessage("Настройки сброшены");
     window.location.reload();
 }
