@@ -873,7 +873,9 @@ $.getAll = function (
 //get scavenging data that is in play for this world, every world has different exponent, factor, and initial seconds. Also getting the URLS of each mass scavenging page
 //we can limit the amount of pages we need to call this way, since the mass scavenging pages have all the data that is necessary: troopcounts, which categories per village are unlocked, and if rally point exists.
 function getData() {
-    $("#massScavengeGalkir95").remove();
+    // Не удаляем основное окно - оно должно оставаться открытым для повторов
+    // Удаляем только старое окно с кнопками отправки если есть
+    $("#massScavengeFinal").remove();
     URLs = [];
     $.get(URLReq, function (data) {
         if ($(".paged-nav-item").length > 0) {
@@ -1486,14 +1488,10 @@ function restoreRepeats() {
 }
 
 function sendGroup(groupNr, premiumEnabled) {
-    if (premiumEnabled == true) {
-        actuallyEnabled = false;
-        actuallyEnabled = confirm("Вы уверены, что хотите отправить отряды очистки с использованием premium? Отмена отправит отряд очистки без premium.   ********* В ЗАВИСИМОСТИ ОТ КОЛИЧЕСТВА ЮНИТОВ/ДЕРЕВЕНЬ, КОТОРЫЕ ВЫ ОТПРАВЛЯЕТЕ, ЭТО МОЖЕТ ПРИВЕСТИ К ОЧЕНЬ ВЫСОКИМ ЗАТРАТАМ PP! ИСПОЛЬЗУЙТЕ ЭТУ ФУНКЦИЮ ТОЛЬКО ЕСЛИ ВЫ МОЖЕТЕ СЕБЕ ЭТО ПОЗВОЛИТЬ/ЗНАЕТЕ, СКОЛЬКО БУДУТ СТОИТЬ ОТДЕЛЬНЫЕ ЗАДАНИЯ С PP! *********");
-    }
-    else {
-        actuallyEnabled = false;
-    }
-    if (actuallyEnabled == true) {
+    // Убрано подтверждение - сразу отправляем
+    var actuallyEnabled = premiumEnabled === true;
+    
+    if (actuallyEnabled) {
         tempSquads = squads_premium[groupNr];
     }
     else {
@@ -1514,12 +1512,20 @@ function sendGroup(groupNr, premiumEnabled) {
         !1
     );
 
-    //once group is sent, remove the row from the table
+    //once group is sent, remove the row from the table (но не закрываем окно)
     setTimeout(function () { 
         $(`#sendRow${groupNr}`).remove(); 
-        $(':button[id^="sendMass"]').prop('disabled', false); 
-        $(':button[id^="sendMassPremium"]').prop('disabled', false); 
-        $("#sendMass")[0].focus(); 
+        // Проверяем, остались ли еще группы
+        var remainingButtons = $(':button[id^="sendMass"]').length;
+        if (remainingButtons > 0) {
+            $(':button[id^="sendMass"]').prop('disabled', false); 
+            $(':button[id^="sendMassPremium"]').prop('disabled', false); 
+            $("#sendMass")[0].focus();
+        } else {
+            // Все группы отправлены, но окно оставляем открытым
+            $(':button[id^="sendMass"]').prop('disabled', false); 
+            $(':button[id^="sendMassPremium"]').prop('disabled', false);
+        }
     }, 200);
 }
 
