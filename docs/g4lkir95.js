@@ -1070,7 +1070,7 @@ html = `
         <p style="margin:2px; font-size:11px;">
             <font color="${titleColor}">${langShinko[6]} </font><span style="text-shadow:-1px -1px 0 ${titleColor},1px -1px 0 ${titleColor},-1px 1px 0 ${titleColor},1px 1px 0 ${titleColor}; font-size:11px;">G4lKir95</span>
         </p>
-        <button class="btn btnGalkir95" id="toggleLogUIPanelBtn" style="position:absolute; right:5px; bottom:2px; width:30px; height:20px; font-size:8px; padding:1px; line-height:1;">Логи</button>
+        <button class="btn" id="toggleLogUIPanelBtn" style="position:absolute; right:5px; bottom:2px; width:40px; height:20px; font-size:8px; padding:1px; line-height:1; background-color:${backgroundColor}; color:${titleColor}; border:1px solid ${borderColor};">Логи</button>
     </div>
 </div>
 `;
