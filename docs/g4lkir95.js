@@ -940,42 +940,11 @@ function getData() {
                             squads_premium[groupNumber].push(squad_requests_premium[k]);
                         }
 
-                        //create html send screen with button per launch
-                        console.log("Creating launch options");
-                        htmlWithLaunchButtons = `<div id="massScavengeFinal" class="ui-widget-content" style="position:fixed;background-color:${backgroundColor};cursor:move;z-index:50;">
-                        <button class="btn" id = "x" onclick="closeWindow('massScavengeFinal')">
-                            X
-                        </button>
-                        <table id="massScavengeGalkir95FinalTable" class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}">
-                        <tr>
-                            <td colspan="10" id="massScavengeGalkir95Title" style="text-align:center; width:auto; background-color:${headerColor}">
-                                <h3>
-                                    <center style="margin:10px"><u>
-                                            <font color="${titleColor}">${langShinko[7]}</font>
-                                        </u>
-                                    </center>
-                                </h3>
-                            </td>
-                        </tr>`;
-                        for (var s = 0; s < Object.keys(squads).length; s++) {
-                            //add row with new button
-                            htmlWithLaunchButtons += `<tr id="sendRow${s}" style="text-align:center; width:auto; background-color:${backgroundColor}"><td style="text-align:center; width:auto; background-color:${backgroundColor}"><center><input type="button"  class="btn btnGalkir95" id="sendMass" onclick="sendGroup(${s},false)" value="${langShinko[8]}${s + 1}"></center></td><td style="text-align:center; width:auto; background-color:${backgroundColor}"><center><input type="button"  class="btn btn-pp btn-send-premium" id="sendMassPremium" onclick="sendGroup(${s},true)" value="${langShinko[8]}${s + 1} С PREMIUM" style="display:none"></center></td></tr>`
-                        }
-                        htmlWithLaunchButtons += "</table></div>"
-                        //appending to page
-                        console.log("Creating launch UI");
-                        $(".maincell").eq(0).prepend(htmlWithLaunchButtons);
-                        $("#mobileContent").eq(0).prepend(htmlWithLaunchButtons);
-
-                        if (is_mobile == false) {
-                            $("#massScavengeFinal").draggable();
-                        }
-                        for (var prem = 0; prem < $("#sendMassPremium").length; prem++) {
-                            if (premiumBtnEnabled == true) {
-                                $($("#sendMassPremium")[prem]).show();
-                            }
-                        }
-                        $("#sendMass")[0].focus()
+                        // Автоматическая отправка всех групп без создания UI
+                        console.log("Starting automatic send of all groups");
+                        sendAllGroupsAuto(false, function() {
+                            saveImportantLog("Все группы успешно отправлены автоматически");
+                        });
                     }
                 },
                 (error) => {
@@ -1485,6 +1454,55 @@ function restoreRepeats() {
         console.error("[repeat] Ошибка восстановления:", e);
         localStorage.removeItem("repeatState");
     }
+}
+
+// Автоматическая отправка группы без confirm и UI
+function sendGroupAuto(groupNr, premiumEnabled, callback) {
+    var actuallyEnabled = premiumEnabled === true;
+    
+    if (actuallyEnabled) {
+        tempSquads = squads_premium[groupNr];
+    }
+    else {
+        tempSquads = squads[groupNr];
+    }
+    
+    // Важный лог: отправка группы
+    saveImportantLog(`Отправка группы #${groupNr + 1}${actuallyEnabled ? ' (premium)' : ''}: ${tempSquads.length} заявок`);
+    
+    //Send one group(one page worth of scavenging)
+    TribalWars.post('scavenge_api', 
+    { ajaxaction: 'send_squads' }, 
+    { "squad_requests": tempSquads }, function () {
+        UI.SuccessMessage(`Группа #${groupNr + 1} успешно отправлена`);
+        if (callback) callback();
+    },
+        !1
+    );
+}
+
+// Отправка всех групп последовательно
+function sendAllGroupsAuto(premiumEnabled, onComplete) {
+    var totalGroups = Object.keys(squads).length;
+    var currentGroup = 0;
+    
+    saveImportantLog(`Начата автоматическая отправка всех групп (всего: ${totalGroups})`);
+    
+    function sendNext() {
+        if (currentGroup >= totalGroups) {
+            saveImportantLog(`Все группы отправлены (всего: ${totalGroups})`);
+            if (onComplete) onComplete();
+            return;
+        }
+        
+        sendGroupAuto(currentGroup, premiumEnabled, function() {
+            // Задержка между группами для избежания перегрузки сервера
+            currentGroup++;
+            setTimeout(sendNext, 500);
+        });
+    }
+    
+    sendNext();
 }
 
 function sendGroup(groupNr, premiumEnabled) {
