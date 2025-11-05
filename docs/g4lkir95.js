@@ -5,8 +5,8 @@
  * ============================================================================
  * 
  * Автор: G4lKir95
- * Дата создания: 2024
- * Версия: v4.3
+ * Дата создания: 2025
+ * Версия: v4.4
  * 
  * Описание:
  * Скрипт для массовой очистки (сбор ресурсов) в игре Tribal Wars.
@@ -25,7 +25,7 @@
 
 // ===== ИНИЦИАЛИЗАЦИЯ =====
 // Версия скрипта (обновляется при каждом изменении)
-var SCRIPT_VERSION = "4.3";
+var SCRIPT_VERSION = "4.4";
 var SCRIPT_AUTHOR = "G4lKir95";
 var SCRIPT_CREATED = "2024";
 
@@ -1117,7 +1117,7 @@ html = `
     <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
         <tbody>
             <tr style="background-color:${backgroundColor}">
-                <td style="text-align:center;background-color:${headerColor}" colspan="4">
+                <td style="text-align:center;background-color:${headerColor}" colspan="5">
                     <h5 style="margin:3px">
                         <center><u>
                                 <font color="${titleColor}">Настройки повторов</font>
@@ -1126,8 +1126,9 @@ html = `
                 </td>
             </tr>
             <tr>
-                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:12px;">Интервал (минут)</td>
-                <td style="background-color:${backgroundColor}; padding:4px; text-align:center;"><input type="number" id="repeatInterval" min="1" value="60" style="width:60px; text-align:center;"></td>
+                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:12px;">Интервал (мин-макс)</td>
+                <td style="background-color:${backgroundColor}; padding:4px; text-align:center;"><input type="number" id="repeatIntervalMin" min="1" value="60" style="width:60px; text-align:center;"></td>
+                <td style="background-color:${backgroundColor}; padding:4px; text-align:center;"><input type="number" id="repeatIntervalMax" min="1" value="60" style="width:60px; text-align:center;"></td>
                 <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:12px;">Количество</td>
                 <td style="background-color:${backgroundColor}; padding:4px; text-align:center;"><input type="number" id="repeatCount" min="1" value="5" style="width:60px; text-align:center;"></td>
             </tr>
@@ -1323,9 +1324,18 @@ function readyToSendOnce() {
 var repeatTimer = null;           // Таймер для интервала повторов
 var repeatCountdown = 0;          // Оставшееся количество повторов
 var repeatTotal = 0;              // Общее количество повторов
-var repeatInterval = 0;           // Интервал между повторами (в минутах)
+var repeatIntervalMin = 0;        // Минимальный интервал между повторами (в минутах)
+var repeatIntervalMax = 0;        // Максимальный интервал между повторами (в минутах)
 var repeatStatusTimer = null;     // Таймер для обновления статуса в UI
 var repeatNextRunTime = null;     // Время следующего запуска
+
+// Функция для получения случайного интервала в заданном диапазоне
+function getRandomInterval() {
+    if (repeatIntervalMin >= repeatIntervalMax) {
+        return repeatIntervalMin;
+    }
+    return Math.floor(Math.random() * (repeatIntervalMax - repeatIntervalMin + 1)) + repeatIntervalMin;
+}
 
 // Обновление отображения статуса повторов в UI
 function updateRepeatStatus() {
@@ -1368,11 +1378,11 @@ function startRepeatStatusTimer() {
 
 // Сохранение состояния повторов в localStorage для восстановления после перезагрузки
 function saveRepeatState() {
-    repeatNextRunTime = repeatCountdown > 0 ? Date.now() + (repeatInterval * 60 * 1000) : null;
     var state = {
         total: repeatTotal,
         countdown: repeatCountdown,
-        interval: repeatInterval,
+        intervalMin: repeatIntervalMin,
+        intervalMax: repeatIntervalMax,
         timeNextRun: repeatNextRunTime
     };
     localStorage.setItem("repeatState", JSON.stringify(state));
@@ -1383,7 +1393,7 @@ function saveRepeatState() {
 function clearRepeatState() {
     localStorage.removeItem("repeatState");
     if (repeatTimer) {
-        clearInterval(repeatTimer);
+        clearTimeout(repeatTimer); // Используем clearTimeout вместо clearInterval, так как теперь используем setTimeout
         repeatTimer = null;
     }
     if (repeatStatusTimer) {
@@ -1392,7 +1402,8 @@ function clearRepeatState() {
     }
     repeatTotal = 0;
     repeatCountdown = 0;
-    repeatInterval = 0;
+    repeatIntervalMin = 0;
+    repeatIntervalMax = 0;
     repeatNextRunTime = null;
     $("#repeatStatusTable").hide();
 }
@@ -1402,11 +1413,17 @@ function clearRepeatState() {
 function readyToSendRepeat() {
     prepareToSend();
     
-    var interval = parseInt($("#repeatInterval").val()) || 60;
+    var intervalMin = parseInt($("#repeatIntervalMin").val()) || 60;
+    var intervalMax = parseInt($("#repeatIntervalMax").val()) || 60;
     var count = parseInt($("#repeatCount").val()) || 5;
     
-    if (interval < 1 || count < 1) {
-        alert("Интервал и количество должны быть больше 0!");
+    if (intervalMin < 1 || intervalMax < 1 || count < 1) {
+        alert("Интервалы и количество должны быть больше 0!");
+        return;
+    }
+    
+    if (intervalMin > intervalMax) {
+        alert("Минимальный интервал не может быть больше максимального!");
         return;
     }
     
@@ -1415,33 +1432,51 @@ function readyToSendRepeat() {
     
     repeatTotal = count;
     repeatCountdown = count;
-    repeatInterval = interval;
+    repeatIntervalMin = intervalMin;
+    repeatIntervalMax = intervalMax;
     
     // Важный лог: запуск с настройками
-    saveImportantLog(`Запуск с повторами: интервал=${interval} мин, количество=${count}`);
+    var randomInterval = getRandomInterval();
+    saveImportantLog(`Запуск с повторами: интервал ${intervalMin}-${intervalMax} мин (случайный: ${randomInterval} мин), количество=${count}`);
     
     // Первый запуск сразу
     getData();
     repeatCountdown--;
-    repeatNextRunTime = Date.now() + (repeatInterval * 60 * 1000);
+    randomInterval = getRandomInterval();
+    repeatNextRunTime = Date.now() + (randomInterval * 60 * 1000);
     saveRepeatState();
     
     if (repeatCountdown > 0) {
-        // Следующие запуски через интервал
-        var intervalMs = interval * 60 * 1000; // минуты в миллисекунды
-        repeatTimer = setInterval(function() {
+        // Функция для планирования следующего запуска со случайным интервалом
+        function scheduleNext() {
             if (repeatCountdown > 0) {
-                saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}`);
-                getData();
-                repeatCountdown--;
-                repeatNextRunTime = Date.now() + (repeatInterval * 60 * 1000);
-                saveRepeatState();
+                randomInterval = getRandomInterval();
+                var intervalMs = randomInterval * 60 * 1000; // минуты в миллисекунды
+                saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal} через ${randomInterval} мин`);
+                
+                repeatTimer = setTimeout(function() {
+                    if (repeatCountdown > 0) {
+                        saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}`);
+                        getData();
+                        repeatCountdown--;
+                        randomInterval = getRandomInterval();
+                        repeatNextRunTime = Date.now() + (randomInterval * 60 * 1000);
+                        saveRepeatState();
+                        scheduleNext(); // Планируем следующий запуск
+                    } else {
+                        clearRepeatState();
+                        saveImportantLog(`Все повторы завершены (${repeatTotal})`);
+                        UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
+                    }
+                }, intervalMs);
             } else {
                 clearRepeatState();
                 saveImportantLog(`Все повторы завершены (${repeatTotal})`);
                 UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
             }
-        }, intervalMs);
+        }
+        
+        scheduleNext(); // Запускаем планирование следующего повтора
     } else {
         clearRepeatState();
     }
@@ -1464,34 +1499,61 @@ function restoreRepeats() {
         
         repeatTotal = state.total;
         repeatCountdown = state.countdown;
-        repeatInterval = state.interval;
+        // Поддержка старого формата (один интервал) и нового (два интервала)
+        if (state.intervalMin !== undefined && state.intervalMax !== undefined) {
+            repeatIntervalMin = state.intervalMin;
+            repeatIntervalMax = state.intervalMax;
+        } else if (state.interval !== undefined) {
+            // Старый формат - используем один интервал для обоих
+            repeatIntervalMin = state.interval;
+            repeatIntervalMax = state.interval;
+        } else {
+            localStorage.removeItem("repeatState");
+            return;
+        }
         repeatNextRunTime = state.timeNextRun;
         
         saveImportantLog(`Восстановление повторов: ${repeatCountdown}/${repeatTotal} осталось`);
         
-        if (timeUntilNext <= 0) {
-            // Время уже прошло - запускаем сразу и продолжаем
-            getData();
-            repeatCountdown--;
-            repeatNextRunTime = Date.now() + (repeatInterval * 60 * 1000);
-            saveRepeatState();
-            
+        // Функция для планирования следующего запуска со случайным интервалом
+        function scheduleNext() {
             if (repeatCountdown > 0) {
-                // Продолжаем с интервалом
-                var intervalMs = repeatInterval * 60 * 1000;
-                repeatTimer = setInterval(function() {
+                var randomInterval = getRandomInterval();
+                var intervalMs = randomInterval * 60 * 1000; // минуты в миллисекунды
+                saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal} через ${randomInterval} мин`);
+                
+                repeatTimer = setTimeout(function() {
                     if (repeatCountdown > 0) {
                         saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}`);
                         getData();
                         repeatCountdown--;
-                        repeatNextRunTime = Date.now() + (repeatInterval * 60 * 1000);
+                        randomInterval = getRandomInterval();
+                        repeatNextRunTime = Date.now() + (randomInterval * 60 * 1000);
                         saveRepeatState();
+                        scheduleNext(); // Планируем следующий запуск
                     } else {
                         clearRepeatState();
                         saveImportantLog(`Все повторы завершены (${repeatTotal})`);
                         UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
                     }
                 }, intervalMs);
+            } else {
+                clearRepeatState();
+                saveImportantLog(`Все повторы завершены (${repeatTotal})`);
+                UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
+            }
+        }
+        
+        if (timeUntilNext <= 0) {
+            // Время уже прошло - запускаем сразу и продолжаем
+            getData();
+            repeatCountdown--;
+            var randomInterval = getRandomInterval();
+            repeatNextRunTime = Date.now() + (randomInterval * 60 * 1000);
+            saveRepeatState();
+            
+            if (repeatCountdown > 0) {
+                scheduleNext(); // Планируем следующий запуск
             } else {
                 clearRepeatState();
             }
@@ -1504,25 +1566,12 @@ function restoreRepeats() {
                 // Запускаем сразу
                 getData();
                 repeatCountdown--;
-                repeatNextRunTime = Date.now() + (repeatInterval * 60 * 1000);
+                var randomInterval = getRandomInterval();
+                repeatNextRunTime = Date.now() + (randomInterval * 60 * 1000);
                 saveRepeatState();
                 
                 if (repeatCountdown > 0) {
-                    // Продолжаем с интервалом
-                    var intervalMs = repeatInterval * 60 * 1000;
-                    repeatTimer = setInterval(function() {
-                        if (repeatCountdown > 0) {
-                            saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}`);
-                            getData();
-                            repeatCountdown--;
-                            repeatNextRunTime = Date.now() + (repeatInterval * 60 * 1000);
-                            saveRepeatState();
-                        } else {
-                            clearRepeatState();
-                            saveImportantLog(`Все повторы завершены (${repeatTotal})`);
-                            UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
-                        }
-                    }, intervalMs);
+                    scheduleNext(); // Планируем следующий запуск
                 } else {
                     clearRepeatState();
                 }
