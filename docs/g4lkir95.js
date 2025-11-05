@@ -532,6 +532,8 @@ else {
         .btnGalkir95:hover { background: #c0392b; }
         .btn-pp { background: #27ae60; color: #ffffff; }
         .btn-pp:hover { background: #219a52; }
+        .btn-success { background: #27ae60; color: #ffffff; border: none; }
+        .btn-success:hover { background: #219a52; }
         #x { position: absolute; background: #e74c3c; color: white; top: 0px; right: 0px; width: 30px; height: 30px; border: none; }
         #cog { position: absolute; background: #34495e; color: white; top: 0px; right: 30px; width: 30px; height: 30px; border: none; }
         #massScavengeGalkir95 { border: 2px solid #34495e; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
@@ -942,7 +944,6 @@ html = `
 <button class="btn" id = "x" onclick="closeWindow('massScavengeGalkir95')">
             X
         </button>
-        <button class="btn btnGalkir95" id="toggleLogUIPanelBtn" style="position:absolute; right:60px; top:0px; width:60px; height:30px;">Логи</button>
     <table id="massScavengeGalkir95Table" class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}">
         <tr>
             <td colspan="10" id="massScavengeGalkir95Title" style="text-align:center; width:auto; background-color:${headerColor}">
@@ -1054,21 +1055,22 @@ html = `
                 <center><input type="button" class="btn btnGalkir95" id="reset" onclick="resetSettings()" value="Сброс" style="font-size:11px; padding:4px 10px;"></center>
             </td>
             <td style="text-align:center; width:50%; background-color:${backgroundColor}; padding:3px;">
-                <center><input type="button" class="btn btnGalkir95" id="sendMassOnce" onclick="readyToSendOnce()" value="Запустить один раз" style="font-size:11px; padding:4px 10px;"></center>
+                <center><input type="button" class="btn btn-success" id="sendMassOnce" onclick="readyToSendOnce()" value="Запустить один раз" style="font-size:11px; padding:4px 10px;"></center>
             </td>
         </tr>
         <tr style="text-align:center; width:auto; background-color:${headerColor}">
             <td colspan="2" style="text-align:center; background-color:${backgroundColor}; padding:3px;">
-                <center><input type="button" class="btn btnGalkir95" id="sendMassRepeat" onclick="readyToSendRepeat()" value="Запустить с повторами" style="font-size:11px; padding:4px 10px; width:90%;"></center>
+                <center><input type="button" class="btn btn-success" id="sendMassRepeat" onclick="readyToSendRepeat()" value="Запустить с повторами" style="font-size:11px; padding:4px 10px; width:90%;"></center>
             </td>
         </tr>
     </table>
 
 
-    <div style="text-align:center;">
+    <div style="text-align:center; position:relative;">
         <p style="margin:2px; font-size:11px;">
             <font color="${titleColor}">${langShinko[6]} </font><span style="text-shadow:-1px -1px 0 ${titleColor},1px -1px 0 ${titleColor},-1px 1px 0 ${titleColor},1px 1px 0 ${titleColor}; font-size:11px;">G4lKir95</span>
         </p>
+        <button class="btn btnGalkir95" id="toggleLogUIPanelBtn" style="position:absolute; right:5px; bottom:5px; width:40px; height:25px; font-size:9px; padding:2px;">Логи</button>
     </div>
 </div>
 `;
@@ -1133,6 +1135,11 @@ for (var i = 0; i < sendOrder.length; i++) {
 
 //focus calculate button!
 $("#sendMassOnce").focus();
+
+// Восстанавливаем повторы при загрузке страницы (если были активны)
+setTimeout(function() {
+    restoreRepeats();
+}, 1000);
 
 // Общая логика подготовки к отправке
 function prepareToSend() {
@@ -1227,6 +1234,31 @@ function readyToSendOnce() {
 var repeatTimer = null;
 var repeatCountdown = 0;
 var repeatTotal = 0;
+var repeatInterval = 0;
+
+// Сохранение состояния повторов в localStorage
+function saveRepeatState() {
+    var state = {
+        total: repeatTotal,
+        countdown: repeatCountdown,
+        interval: repeatInterval,
+        timeNextRun: repeatCountdown > 0 ? Date.now() + (repeatInterval * 60 * 1000) : null
+    };
+    localStorage.setItem("repeatState", JSON.stringify(state));
+    vLog(`[repeat] Сохранено состояние: ${repeatCountdown}/${repeatTotal} осталось, интервал=${repeatInterval} мин`);
+}
+
+// Очистка состояния повторов
+function clearRepeatState() {
+    localStorage.removeItem("repeatState");
+    if (repeatTimer) {
+        clearInterval(repeatTimer);
+        repeatTimer = null;
+    }
+    repeatTotal = 0;
+    repeatCountdown = 0;
+    repeatInterval = 0;
+}
 
 // Запуск с повторами
 function readyToSendRepeat() {
@@ -1241,19 +1273,18 @@ function readyToSendRepeat() {
     }
     
     // Останавливаем предыдущие повторы если есть
-    if (repeatTimer) {
-        clearInterval(repeatTimer);
-        repeatTimer = null;
-    }
+    clearRepeatState();
     
     repeatTotal = count;
     repeatCountdown = count;
+    repeatInterval = interval;
     
     vLog(`[repeat] Запуск с повторами: интервал=${interval} минут, количество=${count}`);
     
     // Первый запуск сразу
     getData();
     repeatCountdown--;
+    saveRepeatState();
     
     if (repeatCountdown > 0) {
         // Следующие запуски через интервал
@@ -1263,13 +1294,100 @@ function readyToSendRepeat() {
                 vLog(`[repeat] Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}, осталось ${repeatCountdown - 1}`);
                 getData();
                 repeatCountdown--;
+                saveRepeatState();
             } else {
-                clearInterval(repeatTimer);
-                repeatTimer = null;
+                clearRepeatState();
                 vLog(`[repeat] Все повторы завершены (${repeatTotal})`);
                 UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
             }
         }, intervalMs);
+    } else {
+        clearRepeatState();
+    }
+}
+
+// Восстановление повторов при загрузке страницы
+function restoreRepeats() {
+    try {
+        var saved = localStorage.getItem("repeatState");
+        if (!saved) return;
+        
+        var state = JSON.parse(saved);
+        if (!state || state.countdown <= 0 || !state.timeNextRun) {
+            localStorage.removeItem("repeatState");
+            return;
+        }
+        
+        var now = Date.now();
+        var timeUntilNext = state.timeNextRun - now;
+        
+        if (timeUntilNext <= 0) {
+            // Время уже прошло - запускаем сразу и продолжаем
+            vLog(`[repeat] Восстановление: время пропущено, запускаем сразу`);
+            repeatTotal = state.total;
+            repeatCountdown = state.countdown;
+            repeatInterval = state.interval;
+            
+            // Запускаем сразу
+            getData();
+            repeatCountdown--;
+            saveRepeatState();
+            
+            if (repeatCountdown > 0) {
+                // Продолжаем с интервалом
+                var intervalMs = repeatInterval * 60 * 1000;
+                repeatTimer = setInterval(function() {
+                    if (repeatCountdown > 0) {
+                        vLog(`[repeat] Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}, осталось ${repeatCountdown - 1}`);
+                        getData();
+                        repeatCountdown--;
+                        saveRepeatState();
+                    } else {
+                        clearRepeatState();
+                        vLog(`[repeat] Все повторы завершены (${repeatTotal})`);
+                        UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
+                    }
+                }, intervalMs);
+            } else {
+                clearRepeatState();
+            }
+        } else {
+            // Время еще не пришло - запускаем таймер
+            vLog(`[repeat] Восстановление: осталось ${Math.round(timeUntilNext/1000/60)} минут до следующего запуска`);
+            repeatTotal = state.total;
+            repeatCountdown = state.countdown;
+            repeatInterval = state.interval;
+            
+            // Запускаем таймер на оставшееся время
+            repeatTimer = setTimeout(function() {
+                // Запускаем сразу
+                getData();
+                repeatCountdown--;
+                saveRepeatState();
+                
+                if (repeatCountdown > 0) {
+                    // Продолжаем с интервалом
+                    var intervalMs = repeatInterval * 60 * 1000;
+                    repeatTimer = setInterval(function() {
+                        if (repeatCountdown > 0) {
+                            vLog(`[repeat] Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}, осталось ${repeatCountdown - 1}`);
+                            getData();
+                            repeatCountdown--;
+                            saveRepeatState();
+                        } else {
+                            clearRepeatState();
+                            vLog(`[repeat] Все повторы завершены (${repeatTotal})`);
+                            UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
+                        }
+                    }, intervalMs);
+                } else {
+                    clearRepeatState();
+                }
+            }, timeUntilNext);
+        }
+    } catch (e) {
+        console.error("[repeat] Ошибка восстановления:", e);
+        localStorage.removeItem("repeatState");
     }
 }
 
