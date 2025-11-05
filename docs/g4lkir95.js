@@ -1445,6 +1445,7 @@ function readyToSendRepeat() {
     randomInterval = getRandomInterval();
     repeatNextRunTime = Date.now() + (randomInterval * 60 * 1000);
     saveRepeatState();
+    startRepeatStatusTimer(); // Запускаем таймер статуса для отображения
     
     if (repeatCountdown > 0) {
         // Функция для планирования следующего запуска со случайным интервалом
@@ -1546,6 +1547,8 @@ function restoreRepeats() {
         
         if (timeUntilNext <= 0) {
             // Время уже прошло - запускаем сразу и продолжаем
+            startRepeatStatusTimer(); // Запускаем таймер статуса для отображения
+            saveImportantLog(`Время следующего запуска уже прошло, запускаем сразу`);
             getData();
             repeatCountdown--;
             var randomInterval = getRandomInterval();
@@ -1564,6 +1567,7 @@ function restoreRepeats() {
             // Запускаем таймер на оставшееся время
             repeatTimer = setTimeout(function() {
                 // Запускаем сразу
+                saveImportantLog(`Таймер сработал, запускаем отправку`);
                 getData();
                 repeatCountdown--;
                 var randomInterval = getRandomInterval();
