@@ -188,6 +188,52 @@ function uiLogGroupEnd() {
     uiLogAppend(['▲ end']);
 }
 
+// Сохранение важных логов (запоминаются между перезагрузками)
+function saveImportantLog(message) {
+    try {
+        var ts = new Date();
+        var logEntry = {
+            time: ts.toISOString(),
+            message: message
+        };
+        
+        // Сохраняем в localStorage (последние 100 записей)
+        var savedLogs = localStorage.getItem("importantLogs");
+        var logs = savedLogs ? JSON.parse(savedLogs) : [];
+        logs.push(logEntry);
+        if (logs.length > 100) {
+            logs = logs.slice(-100); // Оставляем последние 100
+        }
+        localStorage.setItem("importantLogs", JSON.stringify(logs));
+        
+        // Выводим в консоль и UI
+        console.log("[ВАЖНО]", message);
+        uiLogAppend(["[ВАЖНО] " + message]);
+    } catch (e) {
+        console.error("Ошибка сохранения важного лога:", e);
+    }
+}
+
+// Загрузка сохраненных важных логов при старте
+function loadImportantLogs() {
+    try {
+        var savedLogs = localStorage.getItem("importantLogs");
+        if (savedLogs) {
+            var logs = JSON.parse(savedLogs);
+            if (logs.length > 0) {
+                uiLogAppend([`=== Загружено ${logs.length} важных логов из истории ===`]);
+                logs.slice(-10).forEach(function(log) { // Показываем последние 10
+                    var dt = new Date(log.time);
+                    var timeStr = dt.toLocaleString('ru-RU');
+                    uiLogAppend([`[${timeStr}] ${log.message}`]);
+                });
+            }
+        }
+    } catch (e) {
+        console.error("Ошибка загрузки важных логов:", e);
+    }
+}
+
 if (game_data.locale == "ru_RU") {
     //russian server
     langShinko = [
@@ -1049,6 +1095,28 @@ html = `
         </tbody>
     </table>
     
+    <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px; display:none;" id="repeatStatusTable">
+        <tbody>
+            <tr style="background-color:${backgroundColor}">
+                <td style="text-align:center;background-color:${headerColor}" colspan="2">
+                    <h5 style="margin:3px">
+                        <center><u>
+                                <font color="${titleColor}">Статус повторов</font>
+                            </u></center>
+                    </h5>
+                </td>
+            </tr>
+            <tr>
+                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:11px;">Осталось повторов:</td>
+                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:11px; font-weight:bold;" id="repeatCountdownDisplay">-</td>
+            </tr>
+            <tr>
+                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:11px;">До следующего запуска:</td>
+                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:11px; font-weight:bold;" id="repeatTimeDisplay">-</td>
+            </tr>
+        </tbody>
+    </table>
+    
     <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
         <tr style="text-align:center; width:auto; background-color:${headerColor}">
             <td style="text-align:center; width:50%; background-color:${backgroundColor}; padding:3px;">
@@ -1136,8 +1204,9 @@ for (var i = 0; i < sendOrder.length; i++) {
 //focus calculate button!
 $("#sendMassOnce").focus();
 
-// Восстанавливаем повторы при загрузке страницы (если были активны)
+// Восстанавливаем повторы и загружаем логи при загрузке страницы
 setTimeout(function() {
+    loadImportantLogs();
     restoreRepeats();
 }, 1000);
 
@@ -1157,43 +1226,22 @@ function prepareToSend() {
     }
 
     //get trooptypes we wanna use, and runtime
-    vGroup("[readyToSend] Считывание настроек UI и подготовка к расчетам");
-    vLog("[readyToSend] Порядок юнитов (источник '#imgRow :checkbox[name]'):", sendOrder);
     for (var i = 0; i < sendOrder.length; i++) {
-        var selectorCheck = `:checkbox#${sendOrder[i]}`;
-        logElementInfo(selectorCheck, `readyToSend: чтение чекбокса юнита ${sendOrder[i]}`);
-        var isChecked = $(`:checkbox#${sendOrder[i]}`).is(":checked");
-        troopTypeEnabled[sendOrder[i]] = isChecked;
-        vLog(`[readyToSend] Чекбокс юнита ${sendOrder[i]} (${selectorCheck}) => ${isChecked}`);
+        troopTypeEnabled[sendOrder[i]] = $(`:checkbox#${sendOrder[i]}`).is(":checked");
     }
     for (var i = 0; i < sendOrder.length; i++) {
-        var selectorBackup = `#${sendOrder[i]}Backup`;
-        logElementInfo(selectorBackup, `readyToSend: чтение поля 'Оставить дома' для ${sendOrder[i]}`);
-        var backupVal = $(`#${sendOrder[i]}Backup`).val();
-        keepHome[sendOrder[i]] = backupVal;
-        vLog(`[readyToSend] Поле 'Оставить дома' для ${sendOrder[i]} (${selectorBackup}) => ${backupVal}`);
+        keepHome[sendOrder[i]] = $(`#${sendOrder[i]}Backup`).val();
     }
-    vLog("[readyToSend] Итог включенных типов юнитов:", JSON.parse(JSON.stringify(troopTypeEnabled)));
     enabledCategories = [];
     [1,2,3,4].forEach(function(ci){
-        var sel = `#category${ci}`;
-        logElementInfo(sel, `readyToSend: чтение чекбокса категории ${ci}`);
-        enabledCategories.push($(sel).is(":checked"));
+        enabledCategories.push($(`#category${ci}`).is(":checked"));
     });
-    vLog("[readyToSend] Категории (селекторы #category1..#category4) =>", JSON.parse(JSON.stringify(enabledCategories)));
 
     // Время фиксировано: 4 часа для OFF и DEF
     localStorage.setItem("timeElement", "Hours");
     time.off = 4;
     time.def = 4;
-    vLog(`[readyToSend] Время фиксировано: off=4, def=4 (часы)`);
 
-    vLog(`[readyToSend] Итог времени (часы): off=${time.off}, def=${time.def}`);
-    if (time.off > 24 || time.def > 24) {
-        alert("Ваше время выполнения превышает 24 часа!");
-    }
-
-    vLog("[readyToSend] Текущий порядок юнитов перед чтением сортировки:", JSON.parse(JSON.stringify(sendOrder)));
     if ($("#settingPriorityPriority")[0].checked == true) {
         prioritiseHighCat = true;
     }
@@ -1201,10 +1249,7 @@ function prepareToSend() {
         prioritiseHighCat = false;
     }
 
-    // Фиксированный порядок юнитов — не меняем sendOrder
-    vLog("[readyToSend] Фиксированный порядок юнитов (без перетаскивания):", JSON.parse(JSON.stringify(sendOrder))); 
-    vLog(`[readyToSend] Режим приоритета: prioritiseHighCat=${prioritiseHighCat}`);
-    vLog("[readyToSend] Сохраняем в localStorage ключи: troopTypeEnabled, keepHome, categoryEnabled, prioritiseHighCat, sendOrder, runTimes");
+    // Сохраняем настройки
     localStorage.setItem("troopTypeEnabled", JSON.stringify(troopTypeEnabled));
     localStorage.setItem("keepHome", JSON.stringify(keepHome));
     localStorage.setItem("categoryEnabled", JSON.stringify(enabledCategories));
@@ -1212,16 +1257,12 @@ function prepareToSend() {
     localStorage.setItem("sendOrder", JSON.stringify(sendOrder));
     localStorage.setItem("runTimes", JSON.stringify(time));
 
-    vLog("[readyToSend] Сохранено. Итоговые настройки:");
-    vLog("- troopTypeEnabled:", JSON.parse(JSON.stringify(troopTypeEnabled)));
-    vLog("- keepHome:", JSON.parse(JSON.stringify(keepHome)));
-    vLog("- categoryEnabled:", JSON.parse(JSON.stringify(enabledCategories)));
-    vLog("- prioritiseHighCat:", prioritiseHighCat);
-    vLog("- sendOrder:", JSON.parse(JSON.stringify(sendOrder)));
-    vLog("- runTimes:", JSON.parse(JSON.stringify(time)));
     categoryEnabled = enabledCategories;
-
-    vGroupEnd();
+    
+    // Важный лог: запуск с настройками
+    var enabledUnits = Object.keys(troopTypeEnabled).filter(k => troopTypeEnabled[k]);
+    var enabledCats = enabledCategories.map((e, i) => e ? (i+1) : null).filter(x => x !== null);
+    saveImportantLog(`Запуск: юниты=[${enabledUnits.join(',')}], категории=[${enabledCats.join(',')}], режим=${prioritiseHighCat ? 'приоритет' : 'сбалансированный'}`);
 }
 
 // Запуск один раз
@@ -1235,17 +1276,59 @@ var repeatTimer = null;
 var repeatCountdown = 0;
 var repeatTotal = 0;
 var repeatInterval = 0;
+var repeatStatusTimer = null;
+var repeatNextRunTime = null;
+
+// Обновление UI статуса повторов
+function updateRepeatStatus() {
+    if (repeatCountdown <= 0) {
+        $("#repeatStatusTable").hide();
+        if (repeatStatusTimer) {
+            clearInterval(repeatStatusTimer);
+            repeatStatusTimer = null;
+        }
+        return;
+    }
+    
+    $("#repeatStatusTable").show();
+    $("#repeatCountdownDisplay").text(repeatCountdown + " из " + repeatTotal);
+    
+    if (repeatNextRunTime) {
+        var now = Date.now();
+        var timeLeft = repeatNextRunTime - now;
+        
+        if (timeLeft <= 0) {
+            $("#repeatTimeDisplay").text("Скоро...");
+        } else {
+            var minutes = Math.floor(timeLeft / 60000);
+            var seconds = Math.floor((timeLeft % 60000) / 1000);
+            $("#repeatTimeDisplay").text(minutes + " мин " + seconds + " сек");
+        }
+    } else {
+        $("#repeatTimeDisplay").text("-");
+    }
+}
+
+// Запуск таймера обновления статуса
+function startRepeatStatusTimer() {
+    if (repeatStatusTimer) {
+        clearInterval(repeatStatusTimer);
+    }
+    repeatStatusTimer = setInterval(updateRepeatStatus, 1000);
+    updateRepeatStatus();
+}
 
 // Сохранение состояния повторов в localStorage
 function saveRepeatState() {
+    repeatNextRunTime = repeatCountdown > 0 ? Date.now() + (repeatInterval * 60 * 1000) : null;
     var state = {
         total: repeatTotal,
         countdown: repeatCountdown,
         interval: repeatInterval,
-        timeNextRun: repeatCountdown > 0 ? Date.now() + (repeatInterval * 60 * 1000) : null
+        timeNextRun: repeatNextRunTime
     };
     localStorage.setItem("repeatState", JSON.stringify(state));
-    vLog(`[repeat] Сохранено состояние: ${repeatCountdown}/${repeatTotal} осталось, интервал=${repeatInterval} мин`);
+    startRepeatStatusTimer();
 }
 
 // Очистка состояния повторов
@@ -1255,9 +1338,15 @@ function clearRepeatState() {
         clearInterval(repeatTimer);
         repeatTimer = null;
     }
+    if (repeatStatusTimer) {
+        clearInterval(repeatStatusTimer);
+        repeatStatusTimer = null;
+    }
     repeatTotal = 0;
     repeatCountdown = 0;
     repeatInterval = 0;
+    repeatNextRunTime = null;
+    $("#repeatStatusTable").hide();
 }
 
 // Запуск с повторами
@@ -1279,11 +1368,13 @@ function readyToSendRepeat() {
     repeatCountdown = count;
     repeatInterval = interval;
     
-    vLog(`[repeat] Запуск с повторами: интервал=${interval} минут, количество=${count}`);
+    // Важный лог: запуск с настройками
+    saveImportantLog(`Запуск с повторами: интервал=${interval} мин, количество=${count}`);
     
     // Первый запуск сразу
     getData();
     repeatCountdown--;
+    repeatNextRunTime = Date.now() + (repeatInterval * 60 * 1000);
     saveRepeatState();
     
     if (repeatCountdown > 0) {
@@ -1291,13 +1382,14 @@ function readyToSendRepeat() {
         var intervalMs = interval * 60 * 1000; // минуты в миллисекунды
         repeatTimer = setInterval(function() {
             if (repeatCountdown > 0) {
-                vLog(`[repeat] Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}, осталось ${repeatCountdown - 1}`);
+                saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}`);
                 getData();
                 repeatCountdown--;
+                repeatNextRunTime = Date.now() + (repeatInterval * 60 * 1000);
                 saveRepeatState();
             } else {
                 clearRepeatState();
-                vLog(`[repeat] Все повторы завершены (${repeatTotal})`);
+                saveImportantLog(`Все повторы завершены (${repeatTotal})`);
                 UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
             }
         }, intervalMs);
@@ -1321,16 +1413,18 @@ function restoreRepeats() {
         var now = Date.now();
         var timeUntilNext = state.timeNextRun - now;
         
+        repeatTotal = state.total;
+        repeatCountdown = state.countdown;
+        repeatInterval = state.interval;
+        repeatNextRunTime = state.timeNextRun;
+        
+        saveImportantLog(`Восстановление повторов: ${repeatCountdown}/${repeatTotal} осталось`);
+        
         if (timeUntilNext <= 0) {
             // Время уже прошло - запускаем сразу и продолжаем
-            vLog(`[repeat] Восстановление: время пропущено, запускаем сразу`);
-            repeatTotal = state.total;
-            repeatCountdown = state.countdown;
-            repeatInterval = state.interval;
-            
-            // Запускаем сразу
             getData();
             repeatCountdown--;
+            repeatNextRunTime = Date.now() + (repeatInterval * 60 * 1000);
             saveRepeatState();
             
             if (repeatCountdown > 0) {
@@ -1338,13 +1432,14 @@ function restoreRepeats() {
                 var intervalMs = repeatInterval * 60 * 1000;
                 repeatTimer = setInterval(function() {
                     if (repeatCountdown > 0) {
-                        vLog(`[repeat] Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}, осталось ${repeatCountdown - 1}`);
+                        saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}`);
                         getData();
                         repeatCountdown--;
+                        repeatNextRunTime = Date.now() + (repeatInterval * 60 * 1000);
                         saveRepeatState();
                     } else {
                         clearRepeatState();
-                        vLog(`[repeat] Все повторы завершены (${repeatTotal})`);
+                        saveImportantLog(`Все повторы завершены (${repeatTotal})`);
                         UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
                     }
                 }, intervalMs);
@@ -1353,16 +1448,14 @@ function restoreRepeats() {
             }
         } else {
             // Время еще не пришло - запускаем таймер
-            vLog(`[repeat] Восстановление: осталось ${Math.round(timeUntilNext/1000/60)} минут до следующего запуска`);
-            repeatTotal = state.total;
-            repeatCountdown = state.countdown;
-            repeatInterval = state.interval;
+            startRepeatStatusTimer();
             
             // Запускаем таймер на оставшееся время
             repeatTimer = setTimeout(function() {
                 // Запускаем сразу
                 getData();
                 repeatCountdown--;
+                repeatNextRunTime = Date.now() + (repeatInterval * 60 * 1000);
                 saveRepeatState();
                 
                 if (repeatCountdown > 0) {
@@ -1370,13 +1463,14 @@ function restoreRepeats() {
                     var intervalMs = repeatInterval * 60 * 1000;
                     repeatTimer = setInterval(function() {
                         if (repeatCountdown > 0) {
-                            vLog(`[repeat] Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}, осталось ${repeatCountdown - 1}`);
+                            saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}`);
                             getData();
                             repeatCountdown--;
+                            repeatNextRunTime = Date.now() + (repeatInterval * 60 * 1000);
                             saveRepeatState();
                         } else {
                             clearRepeatState();
-                            vLog(`[repeat] Все повторы завершены (${repeatTotal})`);
+                            saveImportantLog(`Все повторы завершены (${repeatTotal})`);
                             UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
                         }
                     }, intervalMs);
@@ -1405,19 +1499,10 @@ function sendGroup(groupNr, premiumEnabled) {
     else {
         tempSquads = squads[groupNr];
     }
-    vGroup(`[sendGroup] Отправка группы #${groupNr} (premium=${actuallyEnabled})`);
-    vLog(`[sendGroup] Количество заявок в группе: ${tempSquads.length}`);
-    if (tempSquads.length > 0) {
-        try {
-            var example = tempSquads[0];
-            vLog('[sendGroup] Пример первой заявки:', {
-                village_id: example.village_id,
-                option_id: example.option_id,
-                use_premium: example.use_premium,
-                unit_counts: JSON.parse(JSON.stringify(example.candidate_squad.unit_counts))
-            });
-        } catch (e) {}
-    }
+    
+    // Важный лог: отправка группы
+    saveImportantLog(`Отправка группы #${groupNr}${actuallyEnabled ? ' (premium)' : ''}: ${tempSquads.length} заявок`);
+    
     //Send one group(one page worth of scavenging)
     $(':button[id^="sendMass"]').prop('disabled', true)
     $(':button[id^="sendMassPremium"]').prop('disabled', true)
@@ -1425,7 +1510,6 @@ function sendGroup(groupNr, premiumEnabled) {
     { ajaxaction: 'send_squads' }, 
     { "squad_requests": tempSquads }, function () {
         UI.SuccessMessage("Группа успешно отправлена");
-        vLog('[sendGroup] Успех отправки группы #'+groupNr);
     },
         !1
     );
@@ -1436,34 +1520,26 @@ function sendGroup(groupNr, premiumEnabled) {
         $(':button[id^="sendMass"]').prop('disabled', false); 
         $(':button[id^="sendMassPremium"]').prop('disabled', false); 
         $("#sendMass")[0].focus(); 
-        vGroupEnd();
     }, 200);
 }
 
 function calculateHaulCategories(data) {
     //check if village has rally point
     if (data.has_rally_point == true) {
-        vGroup(`[calc] Деревня ${data.village_name} (#${data.village_id}) — возможно собирать`);
-        vLog(`[calc] Параметры мира: duration_factor=${duration_factor}, duration_exponent=${duration_exponent}, duration_initial_seconds=${duration_initial_seconds}`);
-		
         // Фарм-логика отключена: не игнорируем light нигде
         var isFarmVillage = false;
 		
         var troopsAllowed = {};
-        vGroup('[calc] troopsAllowed: расчет доступных юнитов с учетом чекбоксов и "Оставить дома"');
         for (key in troopTypeEnabled) {
             if (troopTypeEnabled[key] == true) {
                 if (data.unit_counts_home[key] - keepHome[key] > 0) {
                     troopsAllowed[key] = data.unit_counts_home[key] - keepHome[key];
-                    vLog(`[calc] ${key}: чекбокс=on, доступно=${data.unit_counts_home[key]}, оставить_дома=${keepHome[key]} => ${troopsAllowed[key]}`);
                 }
                 else {
                     troopsAllowed[key] = 0;
-                    vLog(`[calc] ${key}: чекбокс=on, но доступно <= оставить_дома => 0`);
                 }
             }
         }
-        vGroupEnd();
 		
         var unitType = {
             "spear": 'def',
@@ -1480,7 +1556,6 @@ function calculateHaulCategories(data) {
         for (var prop in troopsAllowed) {
             typeCount[unitType[prop]] = typeCount[unitType[prop]] + troopsAllowed[prop];
         }
-        vLog(`[calc] typeCount: off=${typeCount.off}, def=${typeCount.def}`);
 
         totalLoot = 0;
 
@@ -1488,25 +1563,19 @@ function calculateHaulCategories(data) {
         var carryMap = { spear:25, sword:15, axe:10, archer:10, light:80, marcher:50, heavy:50, knight:100 };
         for (key in troopsAllowed) {
             if (carryMap[key]) {
-                var add = troopsAllowed[key] * (data.unit_carry_factor * carryMap[key]);
-                totalLoot += add;
-                vLog(`[calc] вклад по ${key}: ${troopsAllowed[key]} * (${data.unit_carry_factor} * ${carryMap[key]}) = ${add}`);
+                totalLoot += troopsAllowed[key] * (data.unit_carry_factor * carryMap[key]);
             }
         }
-        vLog(`[calc] Итого потенциальная добыча totalLoot=${totalLoot}`);
         if (totalLoot == 0) {
             //can't loot from here, end
-            vGroupEnd();
             return;
         }
         if (typeCount.off > typeCount.def) {
             var baseSecs = (time.off * 3600);
             haul = parseInt(((baseSecs / duration_factor - duration_initial_seconds) ** (1 / (duration_exponent)) / 100) ** (1 / 2));
-            vLog(`[calc] Выбран OFF runtime: baseSecs=${baseSecs}; формула => haul=int((((baseSecs/${duration_factor})-${duration_initial_seconds})^(1/${duration_exponent})/100)^(1/2)) = ${haul}`);
         } else {
             var baseSecsD = (time.def * 3600);
             haul = parseInt(((baseSecsD / duration_factor - duration_initial_seconds) ** (1 / (duration_exponent)) / 100) ** (1 / 2));
-            vLog(`[calc] Выбран DEF runtime: baseSecs=${baseSecsD}; формула => haul=int((((baseSecs/${duration_factor})-${duration_initial_seconds})^(1/${duration_exponent})/100)^(1/2)) = ${haul}`);
         }
 
         haulCategoryRate = {};
@@ -1514,53 +1583,41 @@ function calculateHaulCategories(data) {
 
         if (data.options[1].scavenging_squad != null || data.options[2].scavenging_squad != null || data.options[3].scavenging_squad != null || data.options[4].scavenging_squad != null)
 		{
-			vLog("[calc] В одной из категорий уже идёт поиск — пропускаем расчеты распределения");
+			// В одной из категорий уже идёт поиск — пропускаем
 		}
 		else
 		{
             if (data.options[1].is_locked == true || data.options[1].scavenging_squad != null) {
 				haulCategoryRate[1] = 0;
-				vLog('[calc] Категория 1: заблокирована -> 0');
 			} else {
 				haulCategoryRate[1] = haul / 0.1;
-				vLog(`[calc] Категория 1: unlocked => haul/0.1 = ${haulCategoryRate[1]}`);
 			}
             if (data.options[2].is_locked == true || data.options[2].scavenging_squad != null) {
 				haulCategoryRate[2] = 0;
-				vLog('[calc] Категория 2: заблокирована -> 0');
 			} else {
 				haulCategoryRate[2] = haul / 0.25;
-				vLog(`[calc] Категория 2: unlocked => haul/0.25 = ${haulCategoryRate[2]}`);
 			}
             if (data.options[3].is_locked == true || data.options[3].scavenging_squad != null) {
 				haulCategoryRate[3] = 0;
-				vLog('[calc] Категория 3: заблокирована -> 0');
 			} else {
 				haulCategoryRate[3] = haul / 0.50;
-				vLog(`[calc] Категория 3: unlocked => haul/0.50 = ${haulCategoryRate[3]}`);
 			}
             if (data.options[4].is_locked == true || data.options[4].scavenging_squad != null) {
 				haulCategoryRate[4] = 0;
-				vLog('[calc] Категория 4: заблокирована -> 0');
 			} else {
 				haulCategoryRate[4] = haul / 0.75;
-				vLog(`[calc] Категория 4: unlocked => haul/0.75 = ${haulCategoryRate[4]}`);
 			}
 		}
-        vLog('[calc] haulCategoryRate до отключений:', JSON.parse(JSON.stringify(haulCategoryRate)));
 
         for (var i = 0; i < enabledCategories.length; i++) {
             if (enabledCategories[i] == false) {
-                vLog(`[calc] Категория ${i+1} отключена пользователем (#category${i+1}) => 0`);
                 haulCategoryRate[i + 1] = 0;
             }
         }
 
         totalHaul = haulCategoryRate[1] + haulCategoryRate[2] + haulCategoryRate[3] + haulCategoryRate[4];
-        vLog(`[calc] totalHaul = ${totalHaul}`);
 
         unitsReadyForSend = calculateUnitsPerVillage(troopsAllowed);
-        vLog('[calc] unitsReadyForSend по категориям:', JSON.parse(JSON.stringify(unitsReadyForSend)));
 
         for (var k = 0; k < Object.keys(unitsReadyForSend).length; k++) {
             candidate_squad = { "unit_counts": unitsReadyForSend[k], "carry_max": 9999999999 };
@@ -1569,10 +1626,8 @@ function calculateHaulCategories(data) {
                 var reqP = { "village_id": data.village_id, "candidate_squad": candidate_squad, "option_id": k + 1, "use_premium": true };
                 squad_requests.push(req)
                 squad_requests_premium.push(reqP)
-                vLog(`[calc] Добавлена заявка в squad_requests: option_id=${k+1}, village_id=${data.village_id}, unit_counts=`, JSON.parse(JSON.stringify(candidate_squad.unit_counts)));
             }
         }
-        vGroupEnd();
     }
     else {
         console.log("no rally point");
@@ -1584,19 +1639,13 @@ function enableCorrectTroopTypes() {
     for (var i = 0; i < worldUnits.length; i++) {
         if (worldUnits[i] != "militia" && worldUnits[i] != "snob" && worldUnits[i] != "ram" && worldUnits[i] != "catapult" && worldUnits[i] != "spy") {
             if (troopTypeEnabled[worldUnits[i]] == true) {
-                var sel = `#${worldUnits[i]}`;
-                $(sel).prop("checked", true);
-                vLog(`[enableCorrectTroopTypes] Устанавливаем чекбокс ${sel} => checked=true`);
-                logElementInfo(sel, 'enableCorrectTroopTypes: после установки checked=true');
+                $(`#${worldUnits[i]}`).prop("checked", true);
             }
         }
     }
     for (var i = 0; i < categoryEnabled.length + 1; i++) {
         if (categoryEnabled[i] == true) {
-            var catSel = `#category${i + 1}`;
-            $(catSel).prop("checked", true);
-            vLog(`[enableCorrectTroopTypes] Устанавливаем чекбокс категории ${catSel} => checked=true`);
-            logElementInfo(catSel, 'enableCorrectTroopTypes: после установки checked=true');
+            $(`#category${i + 1}`).prop("checked", true);
         }
     }
 }
@@ -1613,8 +1662,6 @@ function calculateUnitsPerVillage(troopsAllowed) {
         "knight": 100
     };
     //calculate HERE :D
-    vGroup('[calcUnits] Распределение юнитов по категориям');
-    vLog('[calcUnits] Вход troopsAllowed:', JSON.parse(JSON.stringify(troopsAllowed)));
     unitsReadyForSend = {};
     unitsReadyForSend[0] = {};
     unitsReadyForSend[1] = {};
@@ -1622,12 +1669,10 @@ function calculateUnitsPerVillage(troopsAllowed) {
     unitsReadyForSend[3] = {};
     if (totalLoot > totalHaul) {
         //too many units
-        vLog('[calcUnits] Слишком много юнитов относительно totalHaul (totalLoot > totalHaul), наполняем сверху вниз');
         //prioritise higher category first
         if (version != "old") {
             for (var j = 3; j >= 0; j--) {
                 var reach = haulCategoryRate[j + 1];
-                vGroup(`[calcUnits] Категория ${j+1}: старт reach=${reach}`);
                 sendOrder.forEach((unit) => {
                     if (troopsAllowed.hasOwnProperty(unit) && reach > 0) {
                         var amountNeeded = Math.floor(reach / unitHaul[unit]);
@@ -1636,16 +1681,13 @@ function calculateUnitsPerVillage(troopsAllowed) {
                             unitsReadyForSend[j][unit] = troopsAllowed[unit];
                             reach = reach - (troopsAllowed[unit] * unitHaul[unit]);
                             troopsAllowed[unit] = 0;
-                            vLog(`[calcUnits] ${unit}: требуется=${amountNeeded}, доступно меньше => берем ${unitsReadyForSend[j][unit]}, новый reach=${reach}`);
                         } else {
                             unitsReadyForSend[j][unit] = amountNeeded;
                             reach = 0;
                             troopsAllowed[unit] = troopsAllowed[unit] - amountNeeded;
-                            vLog(`[calcUnits] ${unit}: требуется=${amountNeeded}, достаточно => берем ${amountNeeded}, reach=0`);
                         }
                     }
                 });
-                vGroupEnd();
             }
         }
         else {
@@ -1653,9 +1695,7 @@ function calculateUnitsPerVillage(troopsAllowed) {
                 for (key in troopsAllowed) {
                     unitsReadyForSend[j][key] = Math.floor((haulCategoryRate[j + 1] * (troopsAllowed[key] / totalLoot)));
                 }
-                vLog(`[calcUnits] old-mode Категория ${j+1}:`, JSON.parse(JSON.stringify(unitsReadyForSend[j])));
             }
-
         }
     }
     else {
@@ -1664,21 +1704,17 @@ function calculateUnitsPerVillage(troopsAllowed) {
         for (key in troopsAllowed) {
             troopNumber += troopsAllowed[key];
         }
-        vLog(`[calcUnits] Недостаточно юнитов: troopNumber=${troopNumber}`);
         if (prioritiseHighCat != true && troopNumber > 130) {
             for (var j = 0; j < 4; j++) {
-                vLog('[calcUnits] Равномерное распределение (нет приоритета, troopNumber>130)');
                 for (key in troopsAllowed) {
                     unitsReadyForSend[j][key] = Math.floor((totalLoot / totalHaul * haulCategoryRate[j + 1]) * (troopsAllowed[key] / totalLoot));
                 }
-                vLog(`[calcUnits] Категория ${j+1}:`, JSON.parse(JSON.stringify(unitsReadyForSend[j])));
             }
         }
         else {
             //prioritise higher category first
             for (var j = 3; j >= 0; j--) {
                 var reach = haulCategoryRate[j + 1];
-                vGroup(`[calcUnits] Приоритет: Категория ${j+1}: старт reach=${reach}`);
                 sendOrder.forEach((unit) => {
                     if (troopsAllowed.hasOwnProperty(unit) && reach > 0) {
                         var amountNeeded = Math.floor(reach / unitHaul[unit]);
@@ -1687,21 +1723,16 @@ function calculateUnitsPerVillage(troopsAllowed) {
                             unitsReadyForSend[j][unit] = troopsAllowed[unit];
                             reach = reach - (troopsAllowed[unit] * unitHaul[unit]);
                             troopsAllowed[unit] = 0;
-                            vLog(`[calcUnits] ${unit}: требуется=${amountNeeded}, доступно меньше => берем ${unitsReadyForSend[j][unit]}, новый reach=${reach}`);
                         } else {
                             unitsReadyForSend[j][unit] = amountNeeded;
                             reach = 0;
                             troopsAllowed[unit] = troopsAllowed[unit] - amountNeeded;
-                            vLog(`[calcUnits] ${unit}: требуется=${amountNeeded}, достаточно => берем ${amountNeeded}, reach=0`);
                         }
                     }
                 });
-                vGroupEnd();
             }
         }
     }
-    vLog('[calcUnits] Итог unitsReadyForSend:', JSON.parse(JSON.stringify(unitsReadyForSend)));
-    vGroupEnd();
     return unitsReadyForSend;
 }
 
