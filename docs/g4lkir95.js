@@ -21,7 +21,7 @@ if (typeof version == 'undefined') {
 
 //set translations
 var langShinko = [
-    "Массовая очистка",
+    "G4lKir95 - Mass Collecting",
     "Выберите типы юнитов/ПОРЯДОК для очистки (перетащите юниты для изменения порядка)",
     "Выберите категории для использования",
     "Когда вы хотите, чтобы ваши отряды вернулись (приблизительно)?",
@@ -937,7 +937,7 @@ function getData() {
 
 //first UI, will always open as soon as you run the script.
 html = `
-<div id="massScavengeGalkir95" class="ui-widget-content" style="width:580px;background-color:${backgroundColor};cursor:move;z-index:50;max-height:85vh;overflow-y:auto;">
+<div id="massScavengeGalkir95" class="ui-widget-content" style="width:350px;background-color:${backgroundColor};cursor:move;z-index:50;max-height:85vh;overflow-y:auto;">
 
 <button class="btn" id = "x" onclick="closeWindow('massScavengeGalkir95')">
             X
@@ -948,7 +948,7 @@ html = `
             <td colspan="10" id="massScavengeGalkir95Title" style="text-align:center; width:auto; background-color:${headerColor}">
                 <h4 style="margin:5px">
                     <center><u>
-                            <font color="${titleColor}">${langShinko[0]}</font>
+                            <font color="${titleColor}">G4lKir95 - Mass Collecting</font>
                         </u>
                     </center>
                 </h4>
@@ -1029,12 +1029,37 @@ html = `
     <!-- Блок Фарм-деревни удалён из интерфейса -->
     
     <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
+        <tbody>
+            <tr style="background-color:${backgroundColor}">
+                <td style="text-align:center;background-color:${headerColor}" colspan="4">
+                    <h5 style="margin:3px">
+                        <center><u>
+                                <font color="${titleColor}">Настройки повторов</font>
+                            </u></center>
+                    </h5>
+                </td>
+            </tr>
+            <tr>
+                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:12px;">Интервал (минут)</td>
+                <td style="background-color:${backgroundColor}; padding:4px; text-align:center;"><input type="number" id="repeatInterval" min="1" value="60" style="width:60px; text-align:center;"></td>
+                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:12px;">Количество</td>
+                <td style="background-color:${backgroundColor}; padding:4px; text-align:center;"><input type="number" id="repeatCount" min="1" value="5" style="width:60px; text-align:center;"></td>
+            </tr>
+        </tbody>
+    </table>
+    
+    <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
         <tr style="text-align:center; width:auto; background-color:${headerColor}">
             <td style="text-align:center; width:50%; background-color:${backgroundColor}; padding:3px;">
                 <center><input type="button" class="btn btnGalkir95" id="reset" onclick="resetSettings()" value="Сброс" style="font-size:11px; padding:4px 10px;"></center>
             </td>
             <td style="text-align:center; width:50%; background-color:${backgroundColor}; padding:3px;">
-                <center><input type="button" class="btn btnGalkir95" id="sendMass" onclick="readyToSend()" value="${langShinko[5]}" style="font-size:11px; padding:4px 10px;"></center>
+                <center><input type="button" class="btn btnGalkir95" id="sendMassOnce" onclick="readyToSendOnce()" value="Запустить один раз" style="font-size:11px; padding:4px 10px;"></center>
+            </td>
+        </tr>
+        <tr style="text-align:center; width:auto; background-color:${headerColor}">
+            <td colspan="2" style="text-align:center; background-color:${backgroundColor}; padding:3px;">
+                <center><input type="button" class="btn btnGalkir95" id="sendMassRepeat" onclick="readyToSendRepeat()" value="Запустить с повторами" style="font-size:11px; padding:4px 10px; width:90%;"></center>
             </td>
         </tr>
     </table>
@@ -1107,9 +1132,10 @@ for (var i = 0; i < sendOrder.length; i++) {
 }
 
 //focus calculate button!
-$("#sendMass").focus();
+$("#sendMassOnce").focus();
 
-function readyToSend() {
+// Общая логика подготовки к отправке
+function prepareToSend() {
     //check if every setting is chosen, otherwise alert and abort
     if ($("#settingPriorityPriority")[0].checked == false && $("#settingPriorityBalanced")[0].checked == false) {
         // no setting chosen
@@ -1141,6 +1167,7 @@ function readyToSend() {
         vLog(`[readyToSend] Поле 'Оставить дома' для ${sendOrder[i]} (${selectorBackup}) => ${backupVal}`);
     }
     vLog("[readyToSend] Итог включенных типов юнитов:", JSON.parse(JSON.stringify(troopTypeEnabled)));
+    enabledCategories = [];
     [1,2,3,4].forEach(function(ci){
         var sel = `#category${ci}`;
         logElementInfo(sel, `readyToSend: чтение чекбокса категории ${ci}`);
@@ -1188,7 +1215,62 @@ function readyToSend() {
     categoryEnabled = enabledCategories;
 
     vGroupEnd();
+}
+
+// Запуск один раз
+function readyToSendOnce() {
+    prepareToSend();
     getData();
+}
+
+// Глобальные переменные для повторов
+var repeatTimer = null;
+var repeatCountdown = 0;
+var repeatTotal = 0;
+
+// Запуск с повторами
+function readyToSendRepeat() {
+    prepareToSend();
+    
+    var interval = parseInt($("#repeatInterval").val()) || 60;
+    var count = parseInt($("#repeatCount").val()) || 5;
+    
+    if (interval < 1 || count < 1) {
+        alert("Интервал и количество должны быть больше 0!");
+        return;
+    }
+    
+    // Останавливаем предыдущие повторы если есть
+    if (repeatTimer) {
+        clearInterval(repeatTimer);
+        repeatTimer = null;
+    }
+    
+    repeatTotal = count;
+    repeatCountdown = count;
+    
+    vLog(`[repeat] Запуск с повторами: интервал=${interval} минут, количество=${count}`);
+    
+    // Первый запуск сразу
+    getData();
+    repeatCountdown--;
+    
+    if (repeatCountdown > 0) {
+        // Следующие запуски через интервал
+        var intervalMs = interval * 60 * 1000; // минуты в миллисекунды
+        repeatTimer = setInterval(function() {
+            if (repeatCountdown > 0) {
+                vLog(`[repeat] Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}, осталось ${repeatCountdown - 1}`);
+                getData();
+                repeatCountdown--;
+            } else {
+                clearInterval(repeatTimer);
+                repeatTimer = null;
+                vLog(`[repeat] Все повторы завершены (${repeatTotal})`);
+                UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
+            }
+        }, intervalMs);
+    }
 }
 
 function sendGroup(groupNr, premiumEnabled) {
