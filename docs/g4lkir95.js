@@ -532,8 +532,8 @@ else {
         .btnGalkir95:hover { background: #c0392b; }
         .btn-pp { background: #27ae60; color: #ffffff; }
         .btn-pp:hover { background: #219a52; }
-        .btn-success { background: #27ae60; color: #ffffff; border: none; }
-        .btn-success:hover { background: #219a52; }
+        .btn-success { background: #2d8650; color: #ffffff; border: none; }
+        .btn-success:hover { background: #256842; }
         #x { position: absolute; background: #e74c3c; color: white; top: 0px; right: 0px; width: 30px; height: 30px; border: none; }
         #cog { position: absolute; background: #34495e; color: white; top: 0px; right: 30px; width: 30px; height: 30px; border: none; }
         #massScavengeGalkir95 { border: 2px solid #34495e; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
@@ -1066,11 +1066,11 @@ html = `
     </table>
 
 
-    <div style="text-align:center; position:relative;">
+    <div style="text-align:center; position:relative; padding-bottom:5px;">
         <p style="margin:2px; font-size:11px;">
             <font color="${titleColor}">${langShinko[6]} </font><span style="text-shadow:-1px -1px 0 ${titleColor},1px -1px 0 ${titleColor},-1px 1px 0 ${titleColor},1px 1px 0 ${titleColor}; font-size:11px;">G4lKir95</span>
         </p>
-        <button class="btn btnGalkir95" id="toggleLogUIPanelBtn" style="position:absolute; right:5px; bottom:5px; width:40px; height:25px; font-size:9px; padding:2px;">Логи</button>
+        <button class="btn btnGalkir95" id="toggleLogUIPanelBtn" style="position:absolute; right:5px; bottom:2px; width:30px; height:20px; font-size:8px; padding:1px; line-height:1;">Логи</button>
     </div>
 </div>
 `;
