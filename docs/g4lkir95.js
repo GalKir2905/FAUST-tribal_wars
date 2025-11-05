@@ -1,25 +1,62 @@
 
+/*!
+ * ============================================================================
+ * G4lKir95 - Mass Collecting Script
+ * ============================================================================
+ * 
+ * Автор: G4lKir95
+ * Дата создания: 2024
+ * Версия: v4.3
+ * 
+ * Описание:
+ * Скрипт для массовой очистки (сбор ресурсов) в игре Tribal Wars.
+ * Позволяет автоматически отправлять отряды на очистку во все деревни
+ * с настраиваемыми параметрами (типы войск, категории, время выполнения).
+ * 
+ * Функции:
+ * - Автоматическая отправка групп отрядов
+ * - Система повторов с сохранением состояния
+ * - Подробное логирование действий
+ * - Настройка количества войск для оставления дома
+ * - Поддержка premium отправки
+ * 
+ * ============================================================================
+ */
+
+// ===== ИНИЦИАЛИЗАЦИЯ =====
+// Версия скрипта (обновляется при каждом изменении)
+var SCRIPT_VERSION = "4.3";
+var SCRIPT_AUTHOR = "G4lKir95";
+var SCRIPT_CREATED = "2024";
+
+// Получение времени сервера для синхронизации
 serverTimeTemp = $("#serverDate")[0].innerText + " " + $("#serverTime")[0].innerText;
 serverTime = serverTimeTemp.match(/^([0][1-9]|[12][0-9]|3[01])[\/\-]([0][1-9]|1[012])[\/\-](\d{4})( (0?[0-9]|[1][0-9]|[2][0-3])[:]([0-5][0-9])([:]([0-5][0-9]))?)?$/);
 serverDate = Date.parse(serverTime[3] + "/" + serverTime[2] + "/" + serverTime[1] + serverTime[4]);
+
+// Определение мобильного устройства
 var is_mobile = !!navigator.userAgent.match(/iphone|android|blackberry/ig) || false;
+
+// Глобальные переменные для данных очистки
 var scavengeInfo;
 var tempElementSelection="";
 
-//relocate to mass scavenging page
+// ===== ПРОВЕРКА И ПЕРЕНАПРАВЛЕНИЕ НА СТРАНИЦУ МАССОВОЙ ОЧИСТКИ =====
+// Если мы не на странице массовой очистки, перенаправляем туда
 if (window.location.href.indexOf('screen=place&mode=scavenge_mass') < 0) {
-    //relocate
     window.location.assign(game_data.link_base_pure + "place&mode=scavenge_mass");
 }
 
+// Удаление старого интерфейса, если он уже существует (для предотвращения дублирования)
 $("#massScavengeGalkir95").remove();
-//set global variables
 
+// Установка версии по умолчанию
 if (typeof version == 'undefined') {
     version = "new";
 }
 
-//set translations
+// ===== ЛОКАЛИЗАЦИЯ ТЕКСТОВ ИНТЕРФЕЙСА =====
+// Массив текстов для интерфейса (заголовки, кнопки, подсказки)
 var langShinko = [
     "G4lKir95 - Mass Collecting",
     "Выберите типы юнитов/ПОРЯДОК для очистки (перетащите юниты для изменения порядка)",
@@ -32,11 +69,12 @@ var langShinko = [
     "Запустить группу "
 ];
 
-// ===== VERBOSE DEBUG LOGGER =====
-// Toggle to enable/disable extremely detailed console tracing
+// ===== СИСТЕМА ДЕТАЛЬНОГО ЛОГИРОВАНИЯ =====
+// Флаг для включения/выключения подробного логирования в консоль
 if (typeof DEBUG_VERBOSE === 'undefined') {
     var DEBUG_VERBOSE = true;
 }
+// Функция для подробного логирования в консоль и UI панель
 if (typeof window.vLog === 'undefined') {
     window.vLog = function() {
         if (!DEBUG_VERBOSE) return;
@@ -44,6 +82,8 @@ if (typeof window.vLog === 'undefined') {
         try { uiLogAppend(arguments); } catch (e) {}
     };
 }
+
+// Функция для начала логической группы (свернутая группа в консоли)
 if (typeof window.vGroup === 'undefined') {
     window.vGroup = function(title) {
         if (!DEBUG_VERBOSE) return;
@@ -51,6 +91,8 @@ if (typeof window.vGroup === 'undefined') {
         try { uiLogGroup(title); } catch (e) {}
     };
 }
+
+// Функция для закрытия логической группы
 if (typeof window.vGroupEnd === 'undefined') {
     window.vGroupEnd = function() {
         if (!DEBUG_VERBOSE) return;
@@ -59,7 +101,8 @@ if (typeof window.vGroupEnd === 'undefined') {
     };
 }
 
-// Detailed element descriptor for future maintenance
+// Функция для логирования детальной информации об элементе (для отладки)
+// Собирает селектор, тег, id, name, type, disabled, checked, value, outerHTML
 function logElementInfo(selector, contextLabel, extra) {
     try {
         var $els = $(selector);
@@ -92,17 +135,21 @@ function logElementInfo(selector, contextLabel, extra) {
     }
 }
 
-// ===== UI LOG PANEL =====
+// ===== UI ПАНЕЛЬ ЛОГИРОВАНИЯ =====
+// Флаг включения/выключения UI панели логирования
 if (typeof window.UILOG_ENABLED === 'undefined') {
     var UILOG_ENABLED = true;
 }
+// Флаг паузы логирования (чтобы не добавлять новые логи)
 if (typeof window.UILOG_PAUSED === 'undefined') {
     var UILOG_PAUSED = false;
 }
+// Глубина вложенности групп для отступов в логах
 if (typeof window.UILOG_GROUP_DEPTH === 'undefined') {
     var UILOG_GROUP_DEPTH = 0;
 }
 
+// Функция безопасного преобразования объекта в строку (для избежания циклических ссылок)
 function uiLogSafeStringify(obj) {
     try {
         const seen = new WeakSet();
@@ -118,6 +165,7 @@ function uiLogSafeStringify(obj) {
     }
 }
 
+// Создание UI панели логирования, если она еще не создана
 function uiLogEnsurePanel() {
     if (document.getElementById('massScavengeLogPanel')) return;
     const css = `
@@ -145,6 +193,7 @@ function uiLogEnsurePanel() {
     $('#logCloseBtn').on('click', function(){ $('#massScavengeLogPanel').hide(); });
 }
 
+// Показать/скрыть UI панель логирования
 function uiLogToggle(show) {
     uiLogEnsurePanel();
     if (typeof show === 'boolean') {
@@ -154,6 +203,7 @@ function uiLogToggle(show) {
     $('#massScavengeLogPanel').toggle();
 }
 
+// Добавление сообщения в UI панель логирования
 function uiLogAppend(argsLike) {
     if (!UILOG_ENABLED || UILOG_PAUSED) return;
     uiLogEnsurePanel();
@@ -176,12 +226,14 @@ function uiLogAppend(argsLike) {
     } catch (e) {}
 }
 
+// Начало группы в UI логах (увеличивает отступ)
 function uiLogGroup(title) {
     if (!UILOG_ENABLED) return;
     uiLogAppend([`▼ ${title}`]);
     UILOG_GROUP_DEPTH++;
 }
 
+// Конец группы в UI логах (уменьшает отступ)
 function uiLogGroupEnd() {
     if (!UILOG_ENABLED) return;
     UILOG_GROUP_DEPTH = Math.max(0, UILOG_GROUP_DEPTH - 1);
@@ -319,10 +371,9 @@ if (game_data.locale == "it_IT") {
     ];
 }
 
-//loading settings
+// ===== ЗАГРУЗКА И ИНИЦИАЛИЗАЦИЯ НАСТРОЕК ИЗ LOCALSTORAGE =====
 
-// troop types
-
+// Загрузка/создание настроек выбранных типов войск
 if (localStorage.getItem("troopTypeEnabled") == null) {
     console.log("No troopTypeEnabled found, making new one")
     worldUnits = game_data.units;
@@ -339,8 +390,7 @@ else {
     var troopTypeEnabled = JSON.parse(localStorage.getItem("troopTypeEnabled"));
 }
 
-// keepHome
-
+// Загрузка/создание настроек количества войск для оставления дома
 if (localStorage.getItem("keepHome") == null) {
     console.log("No units set to keep home, creating")
     var keepHome = {
@@ -359,8 +409,7 @@ else {
     var keepHome = JSON.parse(localStorage.getItem("keepHome"));
 }
 
-// categories enabled
-
+// Загрузка/создание настроек выбранных категорий очистки
 if (localStorage.getItem("categoryEnabled") == null) {
     console.log("No category enabled setting found, making new one")
     var categoryEnabled = [true, true, true, true];
@@ -371,8 +420,7 @@ else {
     var categoryEnabled = JSON.parse(localStorage.getItem("categoryEnabled"));
 }
 
-//priority
-
+// Загрузка/создание настройки приоритета категорий (высокие/низкие)
 if (localStorage.getItem("prioritiseHighCat") == null) {
     console.log("No priority/balance setting found, making new one")
     var prioritiseHighCat = false;
@@ -383,8 +431,7 @@ else {
     var prioritiseHighCat = JSON.parse(localStorage.getItem("prioritiseHighCat"));
 }
 
-//Time element
-
+// Загрузка/создание настройки элемента выбора времени
 if (localStorage.getItem("timeElement") == null) {
     console.log("No timeElement selected, use Date");
     localStorage.setItem("timeElement", "Date");
@@ -396,8 +443,7 @@ else {
 
 }
 
-// sendorder
-
+// Загрузка/создание порядка отправки войск
 if (localStorage.getItem("sendOrder") == null) {
     console.log("No sendorder found, making new one")
     worldUnits = game_data.units;
@@ -415,8 +461,7 @@ else {
     var sendOrder = JSON.parse(localStorage.getItem("sendOrder"));
 }
 
-// runtimes
-
+// Загрузка/создание времени выполнения очистки (off/def в часах, по умолчанию 4 часа)
 if (localStorage.getItem("runTimes") == null) {
     console.log("No runTimes found, making new one")
     var runTimes = {
@@ -434,29 +479,37 @@ if (typeof premiumBtnEnabled == 'undefined') {
     var premiumBtnEnabled = false;
 }
 
+// ===== ИНИЦИАЛИЗАЦИЯ ГЛОБАЛЬНЫХ ПЕРЕМЕННЫХ =====
+// Формирование URL запроса для массовой очистки (с учетом ситтера)
 if (game_data.player.sitter > 0) {
     URLReq = `game.php?t=${game_data.player.id}&screen=place&mode=scavenge_mass`;
 }
 else {
     URLReq = "game.php?&screen=place&mode=scavenge_mass";
 }
-var arrayWithData;
-var enabledCategories = [];
-var availableUnits = [];
-var squad_requests = [];
-var squad_requests_premium = [];
-var scavengeInfo;
-var duration_factor = 0;
-var duration_exponent = 0;
-var duration_initial_seconds = 0;
+
+// Глобальные переменные для хранения данных
+var arrayWithData;                    // Массив данных о деревнях
+var enabledCategories = [];            // Включенные категории очистки
+var availableUnits = [];               // Доступные типы войск
+var squad_requests = [];               // Запросы на отправку отрядов (обычные)
+var squad_requests_premium = [];       // Запросы на отправку отрядов (premium)
+var scavengeInfo;                      // Информация об очистке
+var duration_factor = 0;               // Фактор длительности очистки
+var duration_exponent = 0;             // Показатель степени для расчета длительности
+var duration_initial_seconds = 0;      // Начальная длительность в секундах
+
+// Парсинг названий категорий из страницы
 var categoryNames = JSON.parse("[" + $.find('script:contains("ScavengeMassScreen")')[0].innerHTML.match(/\{.*\:\{.*\:.*\}\}/g) + "]")[0];
-//basic setting, to be safe
+
+// Инициализация времени выполнения очистки (по умолчанию 0)
 var time = {
     'off': 0,
     'def': 0
 };
 
-// THEME: fixed TribWars theme (no theme selector)
+// ===== НАСТРОЙКА ТЕМЫ ИНТЕРФЕЙСА =====
+// Фиксированная тема TribWars (без выбора темы)
 colors = 'tribWars';
 
 //colors for UI
@@ -870,24 +923,31 @@ $.getAll = function (
     }
 };
 
-//get scavenging data that is in play for this world, every world has different exponent, factor, and initial seconds. Also getting the URLS of each mass scavenging page
-//we can limit the amount of pages we need to call this way, since the mass scavenging pages have all the data that is necessary: troopcounts, which categories per village are unlocked, and if rally point exists.
+// ===== ПОЛУЧЕНИЕ ДАННЫХ ОБ ОЧИСТКЕ =====
+// Получение данных об очистке для текущего мира (каждый мир имеет разные параметры: exponent, factor, initial_seconds)
+// Также получаем URL всех страниц массовой очистки
+// Это позволяет минимизировать количество запросов, так как страницы массовой очистки содержат все необходимые данные:
+// количество войск, какие категории разблокированы для каждой деревни, и наличие точки сбора
 function getData() {
     // Не удаляем основное окно - оно должно оставаться открытым для повторов
     // Удаляем только старое окно с кнопками отправки если есть
     $("#massScavengeFinal").remove();
     URLs = [];
+    
+    // Получение первой страницы для определения количества страниц и параметров мира
     $.get(URLReq, function (data) {
+        // Определение количества страниц с деревнями
         if ($(".paged-nav-item").length > 0) {
             amountOfPages = parseInt($(".paged-nav-item")[$(".paged-nav-item").length - 1].href.match(/page=(\d+)/)[1]);
         }
         else {
             amountOfPages = 0;
         }
+        
+        // Формирование списка URL для всех страниц и получение параметров мира
         for (var i = 0; i <= amountOfPages; i++) {
-            //push url that belongs to scavenging page i
             URLs.push(URLReq + "&page=" + i);
-            //get world data
+            // Получение параметров мира (exponent, factor, initial_seconds) из первой страницы
             tempData = JSON.parse($(data).find('script:contains("ScavengeMassScreen")').html().match(/\{.*\:\{.*\:.*\}\}/g)[0]);
             duration_exponent = tempData[1].duration_exponent;
             duration_factor = tempData[1].duration_factor;
@@ -897,38 +957,46 @@ function getData() {
 
     })
         .done(function () {
-            //here we get all the village data and make an array with it, we won't be able to parse unless we add brackets before and after the string
+            // Получение данных всех деревень и формирование массива
+            // Необходимо добавить скобки до и после строки для парсинга JSON
             arrayWithData = "[";
+            
+            // Загрузка данных со всех страниц с ограничением скорости запросов
             $.getAll(URLs,
                 (i, data) => {
+                    // Извлечение данных о деревнях со страницы
                     thisPageData = $(data).find('script:contains("ScavengeMassScreen")').html().match(/\{.*\:\{.*\:.*\}\}/g)[2];
                     arrayWithData += thisPageData + ",";
                 },
                 () => {
-                    //on done
+                    // Завершение формирования массива данных
                     arrayWithData = arrayWithData.substring(0, arrayWithData.length - 1);
-                    //closing bracket so we can parse the data into a useable array
-                    arrayWithData += "]";
+                    arrayWithData += "]";  // Закрывающая скобка для парсинга в массив
                     scavengeInfo = JSON.parse(arrayWithData);
-                    // count and calculate per village how many troops per category need to be sent. 
-                    // Once count is finished, make a new UI element, and group all the results per 200.
-                    // According to morthy, that is the limit at which the server will accept squad pushes.
+                    
+                    // Подсчет и расчет для каждой деревни: сколько войск нужно отправить по каждой категории
+                    // После завершения подсчета: группировка результатов по 200 запросов
+                    // Согласно morty, это лимит, который сервер принимает за один запрос
                     count = 0;
                     for (var i = 0; i < scavengeInfo.length; i++) {
                         calculateHaulCategories(scavengeInfo[i]);
                         count++;
                     }
+                    
+                    // Когда все деревни обработаны
                     if (count == scavengeInfo.length) {
-                        //Post here
                         console.log("Done");
-                        //need to split all the scavenging runs per 200, server limit according to morty
+                        
+                        // Разделение всех запросов на группы по 200 (лимит сервера по morty)
                         squads = {};
                         squads_premium = {};
                         per200 = 0;
                         groupNumber = 0;
                         squads[groupNumber] = [];
                         squads_premium[groupNumber] = [];
+                        
                         for (var k = 0; k < squad_requests.length; k++) {
+                            // Если достигнут лимит в 200 запросов, создаем новую группу
                             if (per200 == 200) {
                                 groupNumber++;
                                 squads[groupNumber] = [];
@@ -1181,28 +1249,32 @@ setTimeout(function() {
     restoreRepeats();
 }, 1000);
 
-// Общая логика подготовки к отправке
+// ===== ПОДГОТОВКА К ОТПРАВКЕ =====
+// Сбор всех настроек из UI, валидация и сохранение в localStorage
 function prepareToSend() {
-    //check if every setting is chosen, otherwise alert and abort
+    // Проверка выбора режима распределения войск (приоритет/сбалансированный)
     if ($("#settingPriorityPriority")[0].checked == false && $("#settingPriorityBalanced")[0].checked == false) {
-        // no setting chosen
         alert("Вы не выбрали, как хотите распределить свои войска! Выберите либо приоритет высших категорий до выбранного времени выполнения, либо сбалансированное распределение по всем категориям!");
         throw Error("didn't choose type");
     }
 
+    // Проверка выбора хотя бы одной категории очистки
     if ($("#category1").is(":checked") == false && $("#category2").is(":checked") == false && $("#category3").is(":checked") == false && $("#category4").is(":checked") == false) {
-        // no category chosen
         alert("Вы не выбрали, какие категории хотите использовать!");
         throw Error("didn't choose category");
     }
 
-    //get trooptypes we wanna use, and runtime
+    // Получение выбранных типов войск из UI
     for (var i = 0; i < sendOrder.length; i++) {
         troopTypeEnabled[sendOrder[i]] = $(`:checkbox#${sendOrder[i]}`).is(":checked");
     }
+    
+    // Получение количества войск для оставления дома
     for (var i = 0; i < sendOrder.length; i++) {
         keepHome[sendOrder[i]] = $(`#${sendOrder[i]}Backup`).val();
     }
+    
+    // Получение выбранных категорий очистки
     enabledCategories = [];
     [1,2,3,4].forEach(function(ci){
         enabledCategories.push($(`#category${ci}`).is(":checked"));
@@ -1213,6 +1285,7 @@ function prepareToSend() {
     time.off = 4;
     time.def = 4;
 
+    // Получение настройки приоритета
     if ($("#settingPriorityPriority")[0].checked == true) {
         prioritiseHighCat = true;
     }
@@ -1220,7 +1293,7 @@ function prepareToSend() {
         prioritiseHighCat = false;
     }
 
-    // Сохраняем настройки
+    // Сохранение всех настроек в localStorage
     localStorage.setItem("troopTypeEnabled", JSON.stringify(troopTypeEnabled));
     localStorage.setItem("keepHome", JSON.stringify(keepHome));
     localStorage.setItem("categoryEnabled", JSON.stringify(enabledCategories));
@@ -1228,6 +1301,7 @@ function prepareToSend() {
     localStorage.setItem("sendOrder", JSON.stringify(sendOrder));
     localStorage.setItem("runTimes", JSON.stringify(time));
 
+    // Обновление глобальной переменной
     categoryEnabled = enabledCategories;
     
     // Важный лог: запуск с настройками
@@ -1237,20 +1311,23 @@ function prepareToSend() {
 }
 
 // Запуск один раз
+// ===== ЗАПУСК ОДИН РАЗ =====
+// Подготовка данных и запуск одного цикла отправки
 function readyToSendOnce() {
     prepareToSend();
     getData();
 }
 
-// Глобальные переменные для повторов
-var repeatTimer = null;
-var repeatCountdown = 0;
-var repeatTotal = 0;
-var repeatInterval = 0;
-var repeatStatusTimer = null;
-var repeatNextRunTime = null;
+// ===== СИСТЕМА ПОВТОРОВ =====
+// Глобальные переменные для управления повторами
+var repeatTimer = null;           // Таймер для интервала повторов
+var repeatCountdown = 0;          // Оставшееся количество повторов
+var repeatTotal = 0;              // Общее количество повторов
+var repeatInterval = 0;           // Интервал между повторами (в минутах)
+var repeatStatusTimer = null;     // Таймер для обновления статуса в UI
+var repeatNextRunTime = null;     // Время следующего запуска
 
-// Обновление UI статуса повторов
+// Обновление отображения статуса повторов в UI
 function updateRepeatStatus() {
     if (repeatCountdown <= 0) {
         $("#repeatStatusTable").hide();
@@ -1280,7 +1357,7 @@ function updateRepeatStatus() {
     }
 }
 
-// Запуск таймера обновления статуса
+// Запуск таймера для обновления статуса повторов каждую секунду
 function startRepeatStatusTimer() {
     if (repeatStatusTimer) {
         clearInterval(repeatStatusTimer);
@@ -1289,7 +1366,7 @@ function startRepeatStatusTimer() {
     updateRepeatStatus();
 }
 
-// Сохранение состояния повторов в localStorage
+// Сохранение состояния повторов в localStorage для восстановления после перезагрузки
 function saveRepeatState() {
     repeatNextRunTime = repeatCountdown > 0 ? Date.now() + (repeatInterval * 60 * 1000) : null;
     var state = {
@@ -1302,7 +1379,7 @@ function saveRepeatState() {
     startRepeatStatusTimer();
 }
 
-// Очистка состояния повторов
+// Очистка состояния повторов (остановка таймеров и сброс переменных)
 function clearRepeatState() {
     localStorage.removeItem("repeatState");
     if (repeatTimer) {
@@ -1320,7 +1397,8 @@ function clearRepeatState() {
     $("#repeatStatusTable").hide();
 }
 
-// Запуск с повторами
+// ===== ЗАПУСК С ПОВТОРАМИ =====
+// Настройка и запуск системы повторов с указанным интервалом и количеством
 function readyToSendRepeat() {
     prepareToSend();
     
@@ -1456,10 +1534,13 @@ function restoreRepeats() {
     }
 }
 
-// Автоматическая отправка группы без confirm и UI
+// ===== ОТПРАВКА ГРУППЫ (АВТОМАТИЧЕСКАЯ) =====
+// Автоматическая отправка одной группы без подтверждения и UI
+// Используется для автоматической отправки всех групп подряд
 function sendGroupAuto(groupNr, premiumEnabled, callback) {
     var actuallyEnabled = premiumEnabled === true;
     
+    // Выбор обычных или premium запросов
     if (actuallyEnabled) {
         tempSquads = squads_premium[groupNr];
     }
@@ -1470,18 +1551,19 @@ function sendGroupAuto(groupNr, premiumEnabled, callback) {
     // Важный лог: отправка группы
     saveImportantLog(`Отправка группы #${groupNr + 1}${actuallyEnabled ? ' (premium)' : ''}: ${tempSquads.length} заявок`);
     
-    //Send one group(one page worth of scavenging)
+    // Отправка одной группы (до 200 запросов на очистку)
     TribalWars.post('scavenge_api', 
     { ajaxaction: 'send_squads' }, 
     { "squad_requests": tempSquads }, function () {
         UI.SuccessMessage(`Группа #${groupNr + 1} успешно отправлена`);
-        if (callback) callback();
+        if (callback) callback();  // Вызов callback после успешной отправки
     },
         !1
     );
 }
 
-// Отправка всех групп последовательно
+// ===== ОТПРАВКА ВСЕХ ГРУПП ПОСЛЕДОВАТЕЛЬНО =====
+// Автоматическая отправка всех групп одна за другой с задержкой между ними
 function sendAllGroupsAuto(premiumEnabled, onComplete) {
     var totalGroups = Object.keys(squads).length;
     var currentGroup = 0;
@@ -1505,13 +1587,17 @@ function sendAllGroupsAuto(premiumEnabled, onComplete) {
     sendNext();
 }
 
+// ===== ОТПРАВКА ГРУППЫ (РУЧНАЯ) =====
+// Отправка одной группы с подтверждением для premium (используется при ручной отправке через UI кнопки)
 function sendGroup(groupNr, premiumEnabled) {
     var actuallyEnabled = false;
     
+    // Запрос подтверждения для premium отправки
     if (premiumEnabled == true) {
         actuallyEnabled = confirm("Отправить с использованием premium? (Это может стоить много PP!)");
     }
     
+    // Выбор обычных или premium запросов
     if (actuallyEnabled == true) {
         tempSquads = squads_premium[groupNr];
     }
@@ -1522,9 +1608,11 @@ function sendGroup(groupNr, premiumEnabled) {
     // Важный лог: отправка группы
     saveImportantLog(`Отправка группы #${groupNr}${actuallyEnabled ? ' (premium)' : ''}: ${tempSquads.length} заявок`);
     
-    //Send one group(one page worth of scavenging)
+    // Отключение кнопок во время отправки
     $(':button[id^="sendMass"]').prop('disabled', true)
     $(':button[id^="sendMassPremium"]').prop('disabled', true)
+    
+    // Отправка одной группы через API
     TribalWars.post('scavenge_api', 
     { ajaxaction: 'send_squads' }, 
     { "squad_requests": tempSquads }, function () {
@@ -1533,7 +1621,7 @@ function sendGroup(groupNr, premiumEnabled) {
         !1
     );
 
-    //once group is sent, remove the row from the table (но не закрываем окно)
+    // После отправки группы: удаление строки из таблицы (но окно не закрываем)
     setTimeout(function () { 
         $(`#sendRow${groupNr}`).remove(); 
         // Проверяем, остались ли еще группы
@@ -1550,15 +1638,19 @@ function sendGroup(groupNr, premiumEnabled) {
     }, 200);
 }
 
+// ===== РАСЧЕТ КАТЕГОРИЙ ОЧИСТКИ ДЛЯ ДЕРЕВНИ =====
+// Расчет количества войск для отправки по каждой категории очистки для одной деревни
 function calculateHaulCategories(data) {
-    //check if village has rally point
+    // Проверка наличия точки сбора в деревне
     if (data.has_rally_point == true) {
         // Фарм-логика отключена: не игнорируем light нигде
         var isFarmVillage = false;
 		
+        // Подсчет доступных войск (с учетом настроек "оставить дома")
         var troopsAllowed = {};
         for (key in troopTypeEnabled) {
             if (troopTypeEnabled[key] == true) {
+                // Вычитаем количество, которое нужно оставить дома
                 if (data.unit_counts_home[key] - keepHome[key] > 0) {
                     troopsAllowed[key] = data.unit_counts_home[key] - keepHome[key];
                 }
@@ -1568,6 +1660,7 @@ function calculateHaulCategories(data) {
             }
         }
 		
+        // Определение типа войск (off/def) для расчета времени выполнения
         var unitType = {
             "spear": 'def',
             "sword": 'def',
@@ -1578,27 +1671,30 @@ function calculateHaulCategories(data) {
             "heavy": 'def',
         }
 
+        // Подсчет общего количества off и def войск
         var typeCount = { 'off': 0, 'def': 0 };
 
         for (var prop in troopsAllowed) {
             typeCount[unitType[prop]] = typeCount[unitType[prop]] + troopsAllowed[prop];
         }
 
+        // Расчет максимально возможного лута
         totalLoot = 0;
-
-        //check what the max possible loot is
         var carryMap = { spear:25, sword:15, axe:10, archer:10, light:80, marcher:50, heavy:50, knight:100 };
         for (key in troopsAllowed) {
             if (carryMap[key]) {
                 totalLoot += troopsAllowed[key] * (data.unit_carry_factor * carryMap[key]);
             }
         }
+        
+        // Если нет войск для отправки, завершаем
         if (totalLoot == 0) {
-            //can't loot from here, end
             return;
         }
+        
+        // Расчет времени выполнения на основе типа войск (off или def)
         if (typeCount.off > typeCount.def) {
-            var baseSecs = (time.off * 3600);
+            var baseSecs = (time.off * 3600);  // Время выполнения в секундах
             haul = parseInt(((baseSecs / duration_factor - duration_initial_seconds) ** (1 / (duration_exponent)) / 100) ** (1 / 2));
         } else {
             var baseSecsD = (time.def * 3600);
