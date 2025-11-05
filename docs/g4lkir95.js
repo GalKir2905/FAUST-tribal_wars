@@ -954,16 +954,8 @@ html = `
                 </h4>
             </td>
         </tr>
-        <tr>
-            <td colspan="10" style="background-color:${backgroundColor}; padding:6px;">
-                <div style="display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap;">
-                    <label for="compactToggle" style="color:${titleColor}; font-size:11px;">Компактный режим</label>
-                    <input type="checkbox" id="compactToggle" />
-                </div>
-            </td>
-        </tr>
         <tr style="background-color:${backgroundColor}">
-            <td style="text-align:center;background-color:${headerColor}" colspan="15">
+            <td style="text-align:center;background-color:${headerColor}" colspan="3">
                 <h5 style="margin:3px">
                     <center><u>
                             <font color="${titleColor}">Выбор войск</font>
@@ -971,11 +963,13 @@ html = `
                 </h5>
             </td>
         </tr>
-        <tr>
-            <td colspan="10" style="background-color:${backgroundColor}; padding: 4px;">
-                <div id="unitsGrid" class="units-grid"></div>
-            </td>
+        <tr style="background-color:${headerColor}">
+            <td style="background-color:${headerColor}; padding:4px; color:${titleColor}; font-size:11px; font-weight:bold;">Войско</td>
+            <td style="background-color:${headerColor}; padding:4px; text-align:center; color:${titleColor}; font-size:11px; font-weight:bold;">Выбрать</td>
+            <td style="background-color:${headerColor}; padding:4px; text-align:center; color:${titleColor}; font-size:11px; font-weight:bold;">Оставить дома</td>
         </tr>
+        <tbody id="unitsTableBody">
+        </tbody>
     </table>
     
     <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
@@ -1067,21 +1061,7 @@ if (is_mobile == false) {
 uiLogEnsurePanel();
 $("#toggleLogUIPanelBtn").on('click', function(){ uiLogToggle(); });
 
-// Compact mode handler
-try {
-    var compactSaved = localStorage.getItem('compactMode') === 'true';
-    if (compactSaved) { $('#massScavengeGalkir95').addClass('compact'); }
-    $('#compactToggle').prop('checked', compactSaved);
-    $('#compactToggle').on('change', function(){
-        var enabled = $(this).is(':checked');
-        localStorage.setItem('compactMode', enabled ? 'true' : 'false');
-        if (enabled) {
-            $('#massScavengeGalkir95').addClass('compact');
-        } else {
-            $('#massScavengeGalkir95').removeClass('compact');
-        }
-    });
-} catch(e) {}
+// Компактный режим удалён из интерфейса
 
 // Время по умолчанию: фиксировано 4 часа для off/def
 runTimes = { off: 4, def: 4 };
@@ -1091,19 +1071,27 @@ localStorage.setItem("runTimes", JSON.stringify(runTimes));
 
 // Время фиксировано, обработчики таймеров отключены
 
+// Русские названия юнитов
+var unitNamesRu = {
+    "spear": "Копейщик",
+    "sword": "Мечник",
+    "axe": "Топорщик",
+    "archer": "Лучник",
+    "light": "Легкая кавалерия",
+    "marcher": "Конный лучник",
+    "heavy": "Тяжелая кавалерия"
+};
+
 //create checkboxes and add them to the UI
 for (var i = 0; i < sendOrder.length; i++) {
-    $("#unitsGrid").eq(0).append(`
-    <div class="unit-item">
-        <div class="unit-header">
-            <span class="unit-name">${sendOrder[i]}</span>
-            <input type="checkbox" class="unit-checkbox" ID="${sendOrder[i]}" name="${sendOrder[i]}">
-        </div>
-        <div class="unit-controls">
-            <div class="backup-label">Оставить дома</div>
-            <input type="text" class="unit-backup" ID="${sendOrder[i]}Backup" name="${sendOrder[i]}" value="${keepHome[sendOrder[i]]}" size="3">
-        </div>
-    </div>`);
+    var unitKey = sendOrder[i];
+    var unitNameRu = unitNamesRu[unitKey] || unitKey;
+    $("#unitsTableBody").eq(0).append(`
+    <tr>
+        <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:12px;">${unitNameRu}</td>
+        <td style="background-color:${backgroundColor}; padding:4px; text-align:center; width:60px;"><input type="checkbox" ID="${unitKey}" name="${unitKey}"></td>
+        <td style="background-color:${backgroundColor}; padding:4px; text-align:center; width:80px;"><input type="text" ID="${unitKey}Backup" name="${unitKey}" value="${keepHome[unitKey]}" size="3" style="text-align:center; width:60px;"></td>
+    </tr>`);
     // сортировка отключена — фиксированный порядок юнитов
 
     if (prioritiseHighCat == true) {
