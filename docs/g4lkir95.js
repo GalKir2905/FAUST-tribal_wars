@@ -6,7 +6,7 @@
  * 
  * Автор: G4lKir95
  * Дата создания: 2025
- * Версия: v5
+ * Версия: v4.4
  * 
  * Описание:
  * Скрипт для массовой очистки (сбор ресурсов) в игре Tribal Wars.
@@ -15,7 +15,6 @@
  * 
  * Функции:
  * - Автоматическая отправка групп отрядов
- * - Система повторов с сохранением состояния
  * - Подробное логирование действий
  * - Настройка количества войск для оставления дома
  * - Поддержка premium отправки
@@ -25,7 +24,7 @@
 
 // ===== ИНИЦИАЛИЗАЦИЯ =====
 // Версия скрипта (обновляется при каждом изменении)
-var SCRIPT_VERSION = "5";
+var SCRIPT_VERSION = "4.4";
 var SCRIPT_AUTHOR = "G4lKir95";
 var SCRIPT_CREATED = "2025";
 
@@ -40,21 +39,6 @@ var is_mobile = !!navigator.userAgent.match(/iphone|android|blackberry/ig) || fa
 // Глобальные переменные для данных очистки
 var scavengeInfo;
 var tempElementSelection="";
-
-// ===== ПРОВЕРКА И ПЕРЕНАПРАВЛЕНИЕ НА СТРАНИЦУ МАССОВОЙ ОЧИСТКИ =====
-// Функция для проверки и перенаправления на страницу массовой очистки
-function ensureOnMassScavengePage() {
-    if (window.location.href.indexOf('screen=place&mode=scavenge_mass') < 0) {
-        window.location.assign(game_data.link_base_pure + "place&mode=scavenge_mass");
-        return false;
-    }
-    return true;
-}
-
-// Перенаправление только при первой загрузке (не при переключении вкладок)
-if (window.location.href.indexOf('screen=place&mode=scavenge_mass') < 0) {
-    window.location.assign(game_data.link_base_pure + "place&mode=scavenge_mass");
-}
 
 // Удаление старого интерфейса, если он уже существует (для предотвращения дублирования)
 $("#massScavengeGalkir95").remove();
@@ -642,15 +626,8 @@ else {
         .btn-pp:hover { background: #219a52; }
         .btn-success { background: #2d8650; color: #ffffff; border: none; }
         .btn-success:hover { background: #256842; }
-        #x { position: absolute; background: #e74c3c; color: white; top: 0px; right: 0px; width: 30px; height: 30px; border: none; cursor: pointer; }
+        #x { position: absolute; background: #e74c3c; color: white; top: 0px; right: 0px; width: 30px; height: 30px; border: none; }
         #cog { position: absolute; background: #34495e; color: white; top: 0px; right: 30px; width: 30px; height: 30px; border: none; }
-        #minimize { position: absolute; background: #34495e; color: white; top: 0px; right: 60px; width: 30px; height: 30px; border: none; cursor: pointer; }
-        #massScavengeGalkir95.minimized { width: 200px !important; height: 40px !important; overflow: hidden !important; }
-        #massScavengeGalkir95.minimized #massScavengeGalkir95Table,
-        #massScavengeGalkir95.minimized table { display: none !important; }
-        #massScavengeGalkir95.minimized #minimize { display: none !important; }
-        #massScavengeGalkir95.minimized #restoreBtn { display: block !important; position: absolute; top: 5px; left: 5px; background: #34495e; color: white; border: none; padding: 5px 10px; cursor: pointer; }
-        #restoreBtn { display: none; }
         #massScavengeGalkir95 { border: 2px solid #34495e; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         #massScavengeGalkir95Table { border-radius: 6px; }
         /* Units grid */
@@ -687,15 +664,8 @@ else {
         .sophHeader { background-color: #151a24; font-weight: bold; color: #e6edf3; }
         .btnGalkir95 { background-image: linear-gradient(#3a4254 0%, #2a3242 50%, #151a24 100%); color:#e6edf3 }
         .btnGalkir95:hover { background-image: linear-gradient(#4a556b 0%, #39445a 50%, #1b2230 100%); }
-        #x { position: absolute; background: #ab2b2b; color: white; top: 0px; right: 0px; width: 30px; height: 30px; cursor: pointer; }
+        #x { position: absolute; background: #ab2b2b; color: white; top: 0px; right: 0px; width: 30px; height: 30px; }
         #cog { position: absolute; background: #232a36; color: white; top: 0px; right: 30px; width: 30px; height: 30px; }
-        #minimize { position: absolute; background: #232a36; color: white; top: 0px; right: 60px; width: 30px; height: 30px; cursor: pointer; }
-        #massScavengeGalkir95.minimized { width: 200px !important; height: 40px !important; overflow: hidden !important; }
-        #massScavengeGalkir95.minimized #massScavengeGalkir95Table,
-        #massScavengeGalkir95.minimized table { display: none !important; }
-        #massScavengeGalkir95.minimized #minimize { display: none !important; }
-        #massScavengeGalkir95.minimized #restoreBtn { display: block !important; position: absolute; top: 5px; left: 5px; background: #232a36; color: white; border: none; padding: 5px 10px; cursor: pointer; }
-        #restoreBtn { display: none; }
         </style>`
     }
     else if (colors == "swedish") {
@@ -886,7 +856,6 @@ else {
                 right: 0px;
                 width: 30px;
                 height: 30px;
-                cursor: pointer;
             }
             #cog {
                 position: absolute;
@@ -897,63 +866,13 @@ else {
                 width: 30px;
                 height: 30px;
             }
-            #minimize {
-                position: absolute;
-                background: #32353b;
-                color: white;
-                top: 0px;
-                right: 60px;
-                width: 30px;
-                height: 30px;
-                cursor: pointer;
-            }
-            #massScavengeGalkir95.minimized {
-                width: 200px !important;
-                height: 40px !important;
-                overflow: hidden !important;
-            }
-            #massScavengeGalkir95.minimized #massScavengeGalkir95Table,
-            #massScavengeGalkir95.minimized table {
-                display: none !important;
-            }
-            #massScavengeGalkir95.minimized #minimize {
-                display: none !important;
-            }
-            #massScavengeGalkir95.minimized #restoreBtn {
-                display: block !important;
-                position: absolute;
-                top: 5px;
-                left: 5px;
-                background: #32353b;
-                color: white;
-                border: none;
-                padding: 5px 10px;
-                cursor: pointer;
-            }
-            #restoreBtn {
-                display: none;
-            }
             </style>`
     }
 }
 
-// Добавление общих стилей для минимизации (применяются ко всем темам)
-var commonMinimizeStyles = `
-<style>
-#minimize { position: absolute; background: #32353b; color: white; top: 0px; right: 60px; width: 30px; height: 30px; cursor: pointer; border: none; z-index: 10; }
-#massScavengeGalkir95.minimized { width: 200px !important; height: 40px !important; overflow: hidden !important; }
-#massScavengeGalkir95.minimized #massScavengeGalkir95Table,
-#massScavengeGalkir95.minimized table { display: none !important; }
-#massScavengeGalkir95.minimized #minimize { display: none !important; }
-#massScavengeGalkir95.minimized #restoreBtn { display: block !important; position: absolute; top: 5px; left: 5px; background: #32353b; color: white; border: none; padding: 5px 10px; cursor: pointer; z-index: 10; }
-#massScavengeGalkir95.minimized #x { display: block !important; z-index: 10; }
-#restoreBtn { display: none; }
-#x { cursor: pointer; }
-</style>`;
-
 //adding UI classes to page
-$("#contentContainer").eq(0).prepend(cssClassesGalkir95 + commonMinimizeStyles);
-$("#mobileHeader").eq(0).prepend(cssClassesGalkir95 + commonMinimizeStyles);
+$("#contentContainer").eq(0).prepend(cssClassesGalkir95);
+$("#mobileHeader").eq(0).prepend(cssClassesGalkir95);
 
 $.getAll = function (
     urls, // array of URLs
@@ -1003,14 +922,6 @@ $.getAll = function (
 // Это позволяет минимизировать количество запросов, так как страницы массовой очистки содержат все необходимые данные:
 // количество войск, какие категории разблокированы для каждой деревни, и наличие точки сбора
 function getData() {
-    // Проверка и перенаправление на страницу массового сбора перед отправкой
-    if (!ensureOnMassScavengePage()) {
-        // Если произошло перенаправление, выходим из функции
-        // Функция будет вызвана снова после перезагрузки страницы
-        return;
-    }
-    
-    // Не удаляем основное окно - оно должно оставаться открытым для повторов
     // Удаляем только старое окно с кнопками отправки если есть
     $("#massScavengeFinal").remove();
     URLs = [];
@@ -1107,13 +1018,9 @@ function getData() {
 html = `
 <div id="massScavengeGalkir95" class="ui-widget-content" style="width:350px;background-color:${backgroundColor};cursor:move;z-index:50;max-height:85vh;overflow-y:auto;">
 
-<button class="btn" id="minimize" onclick="minimizeWindow('massScavengeGalkir95')" title="Свернуть">
-            _
-        </button>
-<button class="btn" id = "x" onclick="closeWindow('massScavengeGalkir95')" title="Закрыть">
+<button class="btn" id = "x" onclick="closeWindow('massScavengeGalkir95')">
             X
         </button>
-<button class="btn" id="restoreBtn" onclick="restoreWindow('massScavengeGalkir95')" style="display:none;">Развернуть</button>
     <table id="massScavengeGalkir95Table" class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}">
         <tr>
             <td colspan="10" id="massScavengeGalkir95Title" style="text-align:center; width:auto; background-color:${headerColor}">
@@ -1200,60 +1107,12 @@ html = `
     <!-- Блок Фарм-деревни удалён из интерфейса -->
     
     <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
-        <tbody>
-            <tr style="background-color:${backgroundColor}">
-                <td style="text-align:center;background-color:${headerColor}" colspan="5">
-                    <h5 style="margin:3px">
-                        <center><u>
-                                <font color="${titleColor}">Настройки повторов</font>
-                            </u></center>
-                    </h5>
-                </td>
-            </tr>
-            <tr>
-                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:12px;">Интервал (мин-макс)</td>
-                <td style="background-color:${backgroundColor}; padding:4px; text-align:center;"><input type="number" id="repeatIntervalMin" min="1" value="60" style="width:45px; text-align:center;"></td>
-                <td style="background-color:${backgroundColor}; padding:4px; text-align:center;"><input type="number" id="repeatIntervalMax" min="1" value="60" style="width:45px; text-align:center;"></td>
-                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:12px;">Количество</td>
-                <td style="background-color:${backgroundColor}; padding:4px; text-align:center;"><input type="number" id="repeatCount" min="1" value="5" style="width:45px; text-align:center;"></td>
-            </tr>
-        </tbody>
-    </table>
-    
-    <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px; display:none;" id="repeatStatusTable">
-        <tbody>
-            <tr style="background-color:${backgroundColor}">
-                <td style="text-align:center;background-color:${headerColor}" colspan="2">
-                    <h5 style="margin:3px">
-                        <center><u>
-                                <font color="${titleColor}">Статус повторов</font>
-                            </u></center>
-                    </h5>
-                </td>
-            </tr>
-            <tr>
-                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:11px;">Осталось повторов:</td>
-                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:11px; font-weight:bold;" id="repeatCountdownDisplay">-</td>
-            </tr>
-            <tr>
-                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:11px;">До следующего запуска:</td>
-                <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:11px; font-weight:bold;" id="repeatTimeDisplay">-</td>
-            </tr>
-        </tbody>
-    </table>
-    
-    <table class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}; margin-top:5px;">
         <tr style="text-align:center; width:auto; background-color:${headerColor}">
             <td style="text-align:center; width:50%; background-color:${backgroundColor}; padding:3px;">
                 <center><input type="button" class="btn btnGalkir95" id="reset" onclick="resetSettings()" value="Сброс" style="font-size:11px; padding:4px 10px;"></center>
             </td>
             <td style="text-align:center; width:50%; background-color:${backgroundColor}; padding:3px;">
-                <center><input type="button" class="btn btn-success" id="sendMassOnce" onclick="readyToSendOnce()" value="Запустить один раз" style="font-size:11px; padding:4px 10px;"></center>
-            </td>
-        </tr>
-        <tr style="text-align:center; width:auto; background-color:${headerColor}">
-            <td colspan="2" style="text-align:center; background-color:${backgroundColor}; padding:3px;">
-                <center><input type="button" class="btn btn-success" id="sendMassRepeat" onclick="readyToSendRepeat()" value="Запустить с повторами" style="font-size:11px; padding:4px 10px; width:90%;"></center>
+                <center><input type="button" class="btn btn-success" id="sendMassOnce" onclick="readyToSendOnce()" value="Запустить" style="font-size:11px; padding:4px 10px;"></center>
             </td>
         </tr>
     </table>
@@ -1329,11 +1188,9 @@ for (var i = 0; i < sendOrder.length; i++) {
 //focus calculate button!
 $("#sendMassOnce").focus();
 
-// Восстанавливаем повторы и загружаем логи при загрузке страницы
+// Загружаем логи при загрузке страницы
 setTimeout(function() {
     loadImportantLogs();
-    restoreRepeats();
-    restoreMinimizeState();
 }, 1000);
 
 // ===== ПОДГОТОВКА К ОТПРАВКЕ =====
@@ -1397,273 +1254,17 @@ function prepareToSend() {
     saveImportantLog(`Запуск: юниты=[${enabledUnits.join(',')}], категории=[${enabledCats.join(',')}], режим=${prioritiseHighCat ? 'приоритет' : 'сбалансированный'}`);
 }
 
-// Запуск один раз
-// ===== ЗАПУСК ОДИН РАЗ =====
-// Подготовка данных и запуск одного цикла отправки
+// ===== ЗАПУСК =====
+// Проверка и перенаправление на страницу массовой очистки, подготовка данных и запуск одного цикла отправки
 function readyToSendOnce() {
+    // Если мы не на странице массовой очистки, перенаправляем туда
+    if (window.location.href.indexOf('screen=place&mode=scavenge_mass') < 0) {
+        window.location.assign(game_data.link_base_pure + "place&mode=scavenge_mass");
+        return; // Прерываем выполнение, так как произойдет перезагрузка страницы
+    }
+    
     prepareToSend();
     getData();
-}
-
-// ===== СИСТЕМА ПОВТОРОВ =====
-// Глобальные переменные для управления повторами
-var repeatTimer = null;           // Таймер для интервала повторов
-var repeatCountdown = 0;          // Оставшееся количество повторов
-var repeatTotal = 0;              // Общее количество повторов
-var repeatIntervalMin = 0;        // Минимальный интервал между повторами (в минутах)
-var repeatIntervalMax = 0;        // Максимальный интервал между повторами (в минутах)
-var repeatStatusTimer = null;     // Таймер для обновления статуса в UI
-var repeatNextRunTime = null;     // Время следующего запуска
-
-// Функция для получения случайного интервала в заданном диапазоне
-function getRandomInterval() {
-    if (repeatIntervalMin >= repeatIntervalMax) {
-        return repeatIntervalMin;
-    }
-    return Math.floor(Math.random() * (repeatIntervalMax - repeatIntervalMin + 1)) + repeatIntervalMin;
-}
-
-// Обновление отображения статуса повторов в UI
-function updateRepeatStatus() {
-    if (repeatCountdown <= 0) {
-        $("#repeatStatusTable").hide();
-        if (repeatStatusTimer) {
-            clearInterval(repeatStatusTimer);
-            repeatStatusTimer = null;
-        }
-        return;
-    }
-    
-    $("#repeatStatusTable").show();
-    $("#repeatCountdownDisplay").text(repeatCountdown + " из " + repeatTotal);
-    
-    if (repeatNextRunTime) {
-        var now = Date.now();
-        var timeLeft = repeatNextRunTime - now;
-        
-        if (timeLeft <= 0) {
-            $("#repeatTimeDisplay").text("Скоро...");
-        } else {
-            var minutes = Math.floor(timeLeft / 60000);
-            var seconds = Math.floor((timeLeft % 60000) / 1000);
-            $("#repeatTimeDisplay").text(minutes + " мин " + seconds + " сек");
-        }
-    } else {
-        $("#repeatTimeDisplay").text("-");
-    }
-}
-
-// Запуск таймера для обновления статуса повторов каждую секунду
-function startRepeatStatusTimer() {
-    if (repeatStatusTimer) {
-        clearInterval(repeatStatusTimer);
-    }
-    repeatStatusTimer = setInterval(updateRepeatStatus, 1000);
-    updateRepeatStatus();
-}
-
-// Сохранение состояния повторов в localStorage для восстановления после перезагрузки
-function saveRepeatState() {
-    var state = {
-        total: repeatTotal,
-        countdown: repeatCountdown,
-        intervalMin: repeatIntervalMin,
-        intervalMax: repeatIntervalMax,
-        timeNextRun: repeatNextRunTime
-    };
-    localStorage.setItem("repeatState", JSON.stringify(state));
-    startRepeatStatusTimer();
-}
-
-// Очистка состояния повторов (остановка таймеров и сброс переменных)
-function clearRepeatState() {
-    localStorage.removeItem("repeatState");
-    if (repeatTimer) {
-        clearTimeout(repeatTimer); // Используем clearTimeout вместо clearInterval, так как теперь используем setTimeout
-        repeatTimer = null;
-    }
-    if (repeatStatusTimer) {
-        clearInterval(repeatStatusTimer);
-        repeatStatusTimer = null;
-    }
-    repeatTotal = 0;
-    repeatCountdown = 0;
-    repeatIntervalMin = 0;
-    repeatIntervalMax = 0;
-    repeatNextRunTime = null;
-    $("#repeatStatusTable").hide();
-}
-
-// ===== ЗАПУСК С ПОВТОРАМИ =====
-// Настройка и запуск системы повторов с указанным интервалом и количеством
-function readyToSendRepeat() {
-    prepareToSend();
-    
-    var intervalMin = parseInt($("#repeatIntervalMin").val()) || 60;
-    var intervalMax = parseInt($("#repeatIntervalMax").val()) || 60;
-    var count = parseInt($("#repeatCount").val()) || 5;
-    
-    if (intervalMin < 1 || intervalMax < 1 || count < 1) {
-        alert("Интервалы и количество должны быть больше 0!");
-        return;
-    }
-    
-    if (intervalMin > intervalMax) {
-        alert("Минимальный интервал не может быть больше максимального!");
-        return;
-    }
-    
-    // Останавливаем предыдущие повторы если есть
-    clearRepeatState();
-    
-    repeatTotal = count;
-    repeatCountdown = count;
-    repeatIntervalMin = intervalMin;
-    repeatIntervalMax = intervalMax;
-    
-    // Важный лог: запуск с настройками
-    var randomInterval = getRandomInterval();
-    saveImportantLog(`Запуск с повторами: интервал ${intervalMin}-${intervalMax} мин (случайный: ${randomInterval} мин), количество=${count}`);
-    
-    // Первый запуск сразу
-    getData();
-    repeatCountdown--;
-    startRepeatStatusTimer(); // Запускаем таймер статуса для отображения
-    
-    if (repeatCountdown > 0) {
-        // Функция для планирования следующего запуска со случайным интервалом
-        function scheduleNext() {
-            if (repeatCountdown > 0) {
-                randomInterval = getRandomInterval();
-                var intervalMs = randomInterval * 60 * 1000; // минуты в миллисекунды
-                saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal} через ${randomInterval} мин`);
-                // Зафиксируем точное время следующего запуска до старта таймера, чтобы статус/UI совпадали
-                repeatNextRunTime = Date.now() + intervalMs;
-                saveRepeatState();
-                
-                repeatTimer = setTimeout(function() {
-                    if (repeatCountdown > 0) {
-                        saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}`);
-                        getData();
-                        repeatCountdown--;
-                        // План следующего повтора будет установлен новой итерацией scheduleNext()
-                        scheduleNext(); // Планируем следующий запуск
-                    } else {
-                        clearRepeatState();
-                        saveImportantLog(`Все повторы завершены (${repeatTotal})`);
-                        UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
-                    }
-                }, intervalMs);
-            } else {
-                clearRepeatState();
-                saveImportantLog(`Все повторы завершены (${repeatTotal})`);
-                UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
-            }
-        }
-        
-        scheduleNext(); // Запускаем планирование следующего повтора
-    } else {
-        clearRepeatState();
-    }
-}
-
-// Восстановление повторов при загрузке страницы
-function restoreRepeats() {
-    try {
-        var saved = localStorage.getItem("repeatState");
-        if (!saved) return;
-        
-        var state = JSON.parse(saved);
-        if (!state || state.countdown <= 0 || !state.timeNextRun) {
-            localStorage.removeItem("repeatState");
-            return;
-        }
-        
-        var now = Date.now();
-        var timeUntilNext = state.timeNextRun - now;
-        
-        repeatTotal = state.total;
-        repeatCountdown = state.countdown;
-        // Поддержка старого формата (один интервал) и нового (два интервала)
-        if (state.intervalMin !== undefined && state.intervalMax !== undefined) {
-            repeatIntervalMin = state.intervalMin;
-            repeatIntervalMax = state.intervalMax;
-        } else if (state.interval !== undefined) {
-            // Старый формат - используем один интервал для обоих
-            repeatIntervalMin = state.interval;
-            repeatIntervalMax = state.interval;
-        } else {
-            localStorage.removeItem("repeatState");
-            return;
-        }
-        repeatNextRunTime = state.timeNextRun;
-        
-        saveImportantLog(`Восстановление повторов: ${repeatCountdown}/${repeatTotal} осталось`);
-        
-        // Функция для планирования следующего запуска со случайным интервалом
-        function scheduleNext() {
-            if (repeatCountdown > 0) {
-                var randomInterval = getRandomInterval();
-                var intervalMs = randomInterval * 60 * 1000; // минуты в миллисекунды
-                saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal} через ${randomInterval} мин`);
-                // Зафиксируем точное время следующего запуска до старта таймера, чтобы статус/UI совпадали
-                repeatNextRunTime = Date.now() + intervalMs;
-                saveRepeatState();
-                
-                repeatTimer = setTimeout(function() {
-                    if (repeatCountdown > 0) {
-                        saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}`);
-                        getData();
-                        repeatCountdown--;
-                        // План следующего повтора будет установлен новой итерацией scheduleNext()
-                        scheduleNext(); // Планируем следующий запуск
-                    } else {
-                        clearRepeatState();
-                        saveImportantLog(`Все повторы завершены (${repeatTotal})`);
-                        UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
-                    }
-                }, intervalMs);
-            } else {
-                clearRepeatState();
-                saveImportantLog(`Все повторы завершены (${repeatTotal})`);
-                UI.SuccessMessage(`Выполнено ${repeatTotal} запусков`);
-            }
-        }
-        
-        if (timeUntilNext <= 0) {
-            // Время уже прошло - запускаем сразу и продолжаем
-            startRepeatStatusTimer(); // Запускаем таймер статуса для отображения
-            saveImportantLog(`Время следующего запуска уже прошло, запускаем сразу`);
-            getData();
-            repeatCountdown--;
-            
-            if (repeatCountdown > 0) {
-                scheduleNext(); // Планируем следующий запуск
-            } else {
-                clearRepeatState();
-            }
-        } else {
-            // Время еще не пришло - запускаем таймер
-            startRepeatStatusTimer();
-            
-            // Запускаем таймер на оставшееся время
-            repeatTimer = setTimeout(function() {
-                // Запускаем сразу
-                saveImportantLog(`Таймер сработал, запускаем отправку`);
-                getData();
-                repeatCountdown--;
-                
-                if (repeatCountdown > 0) {
-                    scheduleNext(); // Планируем следующий запуск
-                } else {
-                    clearRepeatState();
-                }
-            }, timeUntilNext);
-        }
-    } catch (e) {
-        console.error("[repeat] Ошибка восстановления:", e);
-        localStorage.removeItem("repeatState");
-    }
 }
 
 // ===== ОТПРАВКА ГРУППЫ (АВТОМАТИЧЕСКАЯ) =====
@@ -1697,26 +1298,12 @@ function sendGroupAuto(groupNr, premiumEnabled, callback) {
 // ===== ОТПРАВКА ВСЕХ ГРУПП ПОСЛЕДОВАТЕЛЬНО =====
 // Автоматическая отправка всех групп одна за другой с задержкой между ними
 function sendAllGroupsAuto(premiumEnabled, onComplete) {
-    // Проверка и перенаправление на страницу массового сбора перед отправкой
-    if (!ensureOnMassScavengePage()) {
-        // Если произошло перенаправление, выходим из функции
-        // Функция будет вызвана снова после перезагрузки страницы
-        saveImportantLog("Перенаправление на страницу массового сбора перед отправкой");
-        return;
-    }
-    
     var totalGroups = Object.keys(squads).length;
     var currentGroup = 0;
     
     saveImportantLog(`Начата автоматическая отправка всех групп (всего: ${totalGroups})`);
     
     function sendNext() {
-        // Проверка перед каждой отправкой группы
-        if (!ensureOnMassScavengePage()) {
-            saveImportantLog("Перенаправление на страницу массового сбора во время отправки");
-            return;
-        }
-        
         if (currentGroup >= totalGroups) {
             saveImportantLog(`Все группы отправлены (всего: ${totalGroups})`);
             if (onComplete) onComplete();
@@ -2006,9 +1593,6 @@ function calculateUnitsPerVillage(troopsAllowed) {
 }
 
 function resetSettings() {
-    // Очищаем повторы
-    clearRepeatState();
-    
     localStorage.removeItem("troopTypeEnabled");
     localStorage.removeItem("categoryEnabled");
     localStorage.removeItem("prioritiseHighCat");
@@ -2016,68 +1600,14 @@ function resetSettings() {
     localStorage.removeItem("runTimes");
     localStorage.removeItem("keepHome");
     localStorage.removeItem("farmCoords");
-    localStorage.removeItem("repeatState");
     // importantLogs оставляем - они могут быть полезны для истории
     
     UI.BanneredRewardMessage("Настройки сброшены");
     window.location.reload();
 }
 
-// Глобальная переменная для отслеживания состояния минимизации
-var isMinimized = false;
-
-// Функция минимизации окна
-function minimizeWindow(title) {
-    var $window = $("#" + title);
-    $window.addClass("minimized");
-    isMinimized = true;
-    localStorage.setItem("massScavengeMinimized", "true");
-}
-
-// Функция восстановления окна
-function restoreWindow(title) {
-    var $window = $("#" + title);
-    $window.removeClass("minimized");
-    isMinimized = false;
-    localStorage.setItem("massScavengeMinimized", "false");
-}
-
-// Функция закрытия окна
 function closeWindow(title) {
     $("#" + title).remove();
-    localStorage.setItem("massScavengeMinimized", "false");
-}
-
-// Отслеживание видимости страницы (переключение вкладок)
-function handleVisibilityChange() {
-    if (document.hidden) {
-        // Страница скрыта (переключились на другую вкладку)
-        if ($("#massScavengeGalkir95").length > 0 && !isMinimized) {
-            minimizeWindow('massScavengeGalkir95');
-        }
-    } else {
-        // Страница видна (вернулись на вкладку)
-        // Окно остается минимизированным, пользователь может развернуть его вручную
-    }
-}
-
-// Добавление обработчиков событий видимости страницы
-if (typeof document.hidden !== "undefined") {
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-} else if (typeof document.mozHidden !== "undefined") {
-    document.addEventListener("mozvisibilitychange", handleVisibilityChange);
-} else if (typeof document.msHidden !== "undefined") {
-    document.addEventListener("msvisibilitychange", handleVisibilityChange);
-} else if (typeof document.webkitHidden !== "undefined") {
-    document.addEventListener("webkitvisibilitychange", handleVisibilityChange);
-}
-
-// Восстановление состояния минимизации при загрузке
-function restoreMinimizeState() {
-    var savedState = localStorage.getItem("massScavengeMinimized");
-    if (savedState === "true" && $("#massScavengeGalkir95").length > 0) {
-        minimizeWindow('massScavengeGalkir95');
-    }
 }
 
 function zeroPadded(val) {
