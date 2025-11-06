@@ -40,6 +40,12 @@ var is_mobile = !!navigator.userAgent.match(/iphone|android|blackberry/ig) || fa
 var scavengeInfo;
 var tempElementSelection="";
 
+// ===== ПРОВЕРКА И ПЕРЕНАПРАВЛЕНИЕ НА СТРАНИЦУ МАССОВОЙ ОЧИСТКИ =====
+// Если мы не на странице массовой очистки, перенаправляем туда
+if (window.location.href.indexOf('screen=place&mode=scavenge_mass') < 0) {
+    window.location.assign(game_data.link_base_pure + "place&mode=scavenge_mass");
+}
+
 // Удаление старого интерфейса, если он уже существует (для предотвращения дублирования)
 $("#massScavengeGalkir95").remove();
 
@@ -492,29 +498,8 @@ var duration_factor = 0;               // Фактор длительности 
 var duration_exponent = 0;             // Показатель степени для расчета длительности
 var duration_initial_seconds = 0;      // Начальная длительность в секундах
 
-// Парсинг названий категорий из страницы (с значениями по умолчанию, если не на странице массовой очистки)
-var categoryNames = null;
-try {
-    var scriptElement = $.find('script:contains("ScavengeMassScreen")')[0];
-    if (scriptElement && scriptElement.innerHTML) {
-        var match = scriptElement.innerHTML.match(/\{.*\:\{.*\:.*\}\}/g);
-        if (match && match.length > 0) {
-            categoryNames = JSON.parse("[" + match + "]")[0];
-        }
-    }
-} catch (e) {
-    console.log("Не удалось загрузить названия категорий, используются значения по умолчанию");
-}
-
-// Значения по умолчанию для названий категорий, если не на странице массовой очистки
-if (!categoryNames) {
-    categoryNames = {
-        1: { name: "Категория 1" },
-        2: { name: "Категория 2" },
-        3: { name: "Категория 3" },
-        4: { name: "Категория 4" }
-    };
-}
+// Парсинг названий категорий из страницы
+var categoryNames = JSON.parse("[" + $.find('script:contains("ScavengeMassScreen")')[0].innerHTML.match(/\{.*\:\{.*\:.*\}\}/g) + "]")[0];
 
 // Инициализация времени выполнения очистки (по умолчанию 0)
 var time = {
@@ -1133,7 +1118,7 @@ html = `
                 <center><input type="button" class="btn btnGalkir95" id="reset" onclick="resetSettings()" value="Сброс" style="font-size:11px; padding:4px 10px;"></center>
             </td>
             <td style="text-align:center; width:50%; background-color:${backgroundColor}; padding:3px;">
-                <center><input type="button" class="btn btn-success" id="sendMassOnce" onclick="readyToSendOnce()" value="Запустить" style="font-size:11px; padding:4px 10px;"></center>
+                <center><input type="button" class="btn btn-success" id="sendMassOnce" onclick="readyToSendOnce()" value="Запустить один раз" style="font-size:11px; padding:4px 10px;"></center>
             </td>
         </tr>
     </table>
@@ -1209,13 +1194,9 @@ for (var i = 0; i < sendOrder.length; i++) {
 //focus calculate button!
 $("#sendMassOnce").focus();
 
-// Загружаем логи при загрузке страницы и проверяем автоматический запуск
+// Загружаем логи при загрузке страницы
 setTimeout(function() {
     loadImportantLogs();
-    // Проверяем, нужно ли автоматически запустить скрипт после перенаправления
-    if (window.location.href.indexOf('screen=place&mode=scavenge_mass') >= 0) {
-        checkAutoStart();
-    }
 }, 1000);
 
 // ===== ПОДГОТОВКА К ОТПРАВКЕ =====
@@ -1279,47 +1260,12 @@ function prepareToSend() {
     saveImportantLog(`Запуск: юниты=[${enabledUnits.join(',')}], категории=[${enabledCats.join(',')}], режим=${prioritiseHighCat ? 'приоритет' : 'сбалансированный'}`);
 }
 
-// ===== ЗАПУСК =====
-// Проверка и перенаправление на страницу массовой очистки, подготовка данных и запуск одного цикла отправки
+// Запуск один раз
+// ===== ЗАПУСК ОДИН РАЗ =====
+// Подготовка данных и запуск одного цикла отправки
 function readyToSendOnce() {
-    // Если мы не на странице массовой очистки, перенаправляем туда
-    if (window.location.href.indexOf('screen=place&mode=scavenge_mass') < 0) {
-        // Сохраняем флаг для автоматического запуска после перенаправления
-        localStorage.setItem("autoStartScavenge", "true");
-        window.location.assign(game_data.link_base_pure + "place&mode=scavenge_mass");
-        return; // Прерываем выполнение, так как произойдет перезагрузка страницы
-    }
-    
     prepareToSend();
     getData();
-}
-
-// Автоматический запуск после перенаправления на страницу массовой очистки
-function checkAutoStart() {
-    try {
-        var autoStart = localStorage.getItem("autoStartScavenge");
-        if (autoStart === "true") {
-            localStorage.removeItem("autoStartScavenge");
-            // Обновляем categoryNames с правильными значениями со страницы
-            try {
-                var scriptElement = $.find('script:contains("ScavengeMassScreen")')[0];
-                if (scriptElement && scriptElement.innerHTML) {
-                    var match = scriptElement.innerHTML.match(/\{.*\:\{.*\:.*\}\}/g);
-                    if (match && match.length > 0) {
-                        categoryNames = JSON.parse("[" + match + "]")[0];
-                    }
-                }
-            } catch (e) {
-                console.log("Не удалось обновить названия категорий при автоматическом запуске");
-            }
-            // Небольшая задержка, чтобы страница полностью загрузилась
-            setTimeout(function() {
-                readyToSendOnce();
-            }, 500);
-        }
-    } catch (e) {
-        console.error("Ошибка при проверке автоматического запуска:", e);
-    }
 }
 
 // ===== ОТПРАВКА ГРУППЫ (АВТОМАТИЧЕСКАЯ) =====
