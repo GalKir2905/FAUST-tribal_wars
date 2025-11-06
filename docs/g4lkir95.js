@@ -1442,9 +1442,6 @@ function readyToSendRepeat() {
     // Первый запуск сразу
     getData();
     repeatCountdown--;
-    randomInterval = getRandomInterval();
-    repeatNextRunTime = Date.now() + (randomInterval * 60 * 1000);
-    saveRepeatState();
     startRepeatStatusTimer(); // Запускаем таймер статуса для отображения
     
     if (repeatCountdown > 0) {
@@ -1454,15 +1451,16 @@ function readyToSendRepeat() {
                 randomInterval = getRandomInterval();
                 var intervalMs = randomInterval * 60 * 1000; // минуты в миллисекунды
                 saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal} через ${randomInterval} мин`);
+                // Зафиксируем точное время следующего запуска до старта таймера, чтобы статус/UI совпадали
+                repeatNextRunTime = Date.now() + intervalMs;
+                saveRepeatState();
                 
                 repeatTimer = setTimeout(function() {
                     if (repeatCountdown > 0) {
                         saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}`);
                         getData();
                         repeatCountdown--;
-                        randomInterval = getRandomInterval();
-                        repeatNextRunTime = Date.now() + (randomInterval * 60 * 1000);
-                        saveRepeatState();
+                        // План следующего повтора будет установлен новой итерацией scheduleNext()
                         scheduleNext(); // Планируем следующий запуск
                     } else {
                         clearRepeatState();
@@ -1522,15 +1520,16 @@ function restoreRepeats() {
                 var randomInterval = getRandomInterval();
                 var intervalMs = randomInterval * 60 * 1000; // минуты в миллисекунды
                 saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal} через ${randomInterval} мин`);
+                // Зафиксируем точное время следующего запуска до старта таймера, чтобы статус/UI совпадали
+                repeatNextRunTime = Date.now() + intervalMs;
+                saveRepeatState();
                 
                 repeatTimer = setTimeout(function() {
                     if (repeatCountdown > 0) {
                         saveImportantLog(`Повтор ${repeatTotal - repeatCountdown + 1}/${repeatTotal}`);
                         getData();
                         repeatCountdown--;
-                        randomInterval = getRandomInterval();
-                        repeatNextRunTime = Date.now() + (randomInterval * 60 * 1000);
-                        saveRepeatState();
+                        // План следующего повтора будет установлен новой итерацией scheduleNext()
                         scheduleNext(); // Планируем следующий запуск
                     } else {
                         clearRepeatState();
@@ -1551,9 +1550,6 @@ function restoreRepeats() {
             saveImportantLog(`Время следующего запуска уже прошло, запускаем сразу`);
             getData();
             repeatCountdown--;
-            var randomInterval = getRandomInterval();
-            repeatNextRunTime = Date.now() + (randomInterval * 60 * 1000);
-            saveRepeatState();
             
             if (repeatCountdown > 0) {
                 scheduleNext(); // Планируем следующий запуск
@@ -1570,9 +1566,6 @@ function restoreRepeats() {
                 saveImportantLog(`Таймер сработал, запускаем отправку`);
                 getData();
                 repeatCountdown--;
-                var randomInterval = getRandomInterval();
-                repeatNextRunTime = Date.now() + (randomInterval * 60 * 1000);
-                saveRepeatState();
                 
                 if (repeatCountdown > 0) {
                     scheduleNext(); // Планируем следующий запуск
