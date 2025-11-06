@@ -42,7 +42,16 @@ var scavengeInfo;
 var tempElementSelection="";
 
 // ===== ПРОВЕРКА И ПЕРЕНАПРАВЛЕНИЕ НА СТРАНИЦУ МАССОВОЙ ОЧИСТКИ =====
-// Если мы не на странице массовой очистки, перенаправляем туда
+// Функция для проверки и перенаправления на страницу массовой очистки
+function ensureOnMassScavengePage() {
+    if (window.location.href.indexOf('screen=place&mode=scavenge_mass') < 0) {
+        window.location.assign(game_data.link_base_pure + "place&mode=scavenge_mass");
+        return false;
+    }
+    return true;
+}
+
+// Перенаправление только при первой загрузке (не при переключении вкладок)
 if (window.location.href.indexOf('screen=place&mode=scavenge_mass') < 0) {
     window.location.assign(game_data.link_base_pure + "place&mode=scavenge_mass");
 }
@@ -633,8 +642,15 @@ else {
         .btn-pp:hover { background: #219a52; }
         .btn-success { background: #2d8650; color: #ffffff; border: none; }
         .btn-success:hover { background: #256842; }
-        #x { position: absolute; background: #e74c3c; color: white; top: 0px; right: 0px; width: 30px; height: 30px; border: none; }
+        #x { position: absolute; background: #e74c3c; color: white; top: 0px; right: 0px; width: 30px; height: 30px; border: none; cursor: pointer; }
         #cog { position: absolute; background: #34495e; color: white; top: 0px; right: 30px; width: 30px; height: 30px; border: none; }
+        #minimize { position: absolute; background: #34495e; color: white; top: 0px; right: 60px; width: 30px; height: 30px; border: none; cursor: pointer; }
+        #massScavengeGalkir95.minimized { width: 200px !important; height: 40px !important; overflow: hidden !important; }
+        #massScavengeGalkir95.minimized #massScavengeGalkir95Table,
+        #massScavengeGalkir95.minimized table { display: none !important; }
+        #massScavengeGalkir95.minimized #minimize { display: none !important; }
+        #massScavengeGalkir95.minimized #restoreBtn { display: block !important; position: absolute; top: 5px; left: 5px; background: #34495e; color: white; border: none; padding: 5px 10px; cursor: pointer; }
+        #restoreBtn { display: none; }
         #massScavengeGalkir95 { border: 2px solid #34495e; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         #massScavengeGalkir95Table { border-radius: 6px; }
         /* Units grid */
@@ -671,8 +687,15 @@ else {
         .sophHeader { background-color: #151a24; font-weight: bold; color: #e6edf3; }
         .btnGalkir95 { background-image: linear-gradient(#3a4254 0%, #2a3242 50%, #151a24 100%); color:#e6edf3 }
         .btnGalkir95:hover { background-image: linear-gradient(#4a556b 0%, #39445a 50%, #1b2230 100%); }
-        #x { position: absolute; background: #ab2b2b; color: white; top: 0px; right: 0px; width: 30px; height: 30px; }
+        #x { position: absolute; background: #ab2b2b; color: white; top: 0px; right: 0px; width: 30px; height: 30px; cursor: pointer; }
         #cog { position: absolute; background: #232a36; color: white; top: 0px; right: 30px; width: 30px; height: 30px; }
+        #minimize { position: absolute; background: #232a36; color: white; top: 0px; right: 60px; width: 30px; height: 30px; cursor: pointer; }
+        #massScavengeGalkir95.minimized { width: 200px !important; height: 40px !important; overflow: hidden !important; }
+        #massScavengeGalkir95.minimized #massScavengeGalkir95Table,
+        #massScavengeGalkir95.minimized table { display: none !important; }
+        #massScavengeGalkir95.minimized #minimize { display: none !important; }
+        #massScavengeGalkir95.minimized #restoreBtn { display: block !important; position: absolute; top: 5px; left: 5px; background: #232a36; color: white; border: none; padding: 5px 10px; cursor: pointer; }
+        #restoreBtn { display: none; }
         </style>`
     }
     else if (colors == "swedish") {
@@ -863,6 +886,7 @@ else {
                 right: 0px;
                 width: 30px;
                 height: 30px;
+                cursor: pointer;
             }
             #cog {
                 position: absolute;
@@ -873,13 +897,63 @@ else {
                 width: 30px;
                 height: 30px;
             }
+            #minimize {
+                position: absolute;
+                background: #32353b;
+                color: white;
+                top: 0px;
+                right: 60px;
+                width: 30px;
+                height: 30px;
+                cursor: pointer;
+            }
+            #massScavengeGalkir95.minimized {
+                width: 200px !important;
+                height: 40px !important;
+                overflow: hidden !important;
+            }
+            #massScavengeGalkir95.minimized #massScavengeGalkir95Table,
+            #massScavengeGalkir95.minimized table {
+                display: none !important;
+            }
+            #massScavengeGalkir95.minimized #minimize {
+                display: none !important;
+            }
+            #massScavengeGalkir95.minimized #restoreBtn {
+                display: block !important;
+                position: absolute;
+                top: 5px;
+                left: 5px;
+                background: #32353b;
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                cursor: pointer;
+            }
+            #restoreBtn {
+                display: none;
+            }
             </style>`
     }
 }
 
+// Добавление общих стилей для минимизации (применяются ко всем темам)
+var commonMinimizeStyles = `
+<style>
+#minimize { position: absolute; background: #32353b; color: white; top: 0px; right: 60px; width: 30px; height: 30px; cursor: pointer; border: none; z-index: 10; }
+#massScavengeGalkir95.minimized { width: 200px !important; height: 40px !important; overflow: hidden !important; }
+#massScavengeGalkir95.minimized #massScavengeGalkir95Table,
+#massScavengeGalkir95.minimized table { display: none !important; }
+#massScavengeGalkir95.minimized #minimize { display: none !important; }
+#massScavengeGalkir95.minimized #restoreBtn { display: block !important; position: absolute; top: 5px; left: 5px; background: #32353b; color: white; border: none; padding: 5px 10px; cursor: pointer; z-index: 10; }
+#massScavengeGalkir95.minimized #x { display: block !important; z-index: 10; }
+#restoreBtn { display: none; }
+#x { cursor: pointer; }
+</style>`;
+
 //adding UI classes to page
-$("#contentContainer").eq(0).prepend(cssClassesGalkir95);
-$("#mobileHeader").eq(0).prepend(cssClassesGalkir95);
+$("#contentContainer").eq(0).prepend(cssClassesGalkir95 + commonMinimizeStyles);
+$("#mobileHeader").eq(0).prepend(cssClassesGalkir95 + commonMinimizeStyles);
 
 $.getAll = function (
     urls, // array of URLs
@@ -929,6 +1003,13 @@ $.getAll = function (
 // Это позволяет минимизировать количество запросов, так как страницы массовой очистки содержат все необходимые данные:
 // количество войск, какие категории разблокированы для каждой деревни, и наличие точки сбора
 function getData() {
+    // Проверка и перенаправление на страницу массового сбора перед отправкой
+    if (!ensureOnMassScavengePage()) {
+        // Если произошло перенаправление, выходим из функции
+        // Функция будет вызвана снова после перезагрузки страницы
+        return;
+    }
+    
     // Не удаляем основное окно - оно должно оставаться открытым для повторов
     // Удаляем только старое окно с кнопками отправки если есть
     $("#massScavengeFinal").remove();
@@ -1026,9 +1107,13 @@ function getData() {
 html = `
 <div id="massScavengeGalkir95" class="ui-widget-content" style="width:350px;background-color:${backgroundColor};cursor:move;z-index:50;max-height:85vh;overflow-y:auto;">
 
-<button class="btn" id = "x" onclick="closeWindow('massScavengeGalkir95')">
+<button class="btn" id="minimize" onclick="minimizeWindow('massScavengeGalkir95')" title="Свернуть">
+            _
+        </button>
+<button class="btn" id = "x" onclick="closeWindow('massScavengeGalkir95')" title="Закрыть">
             X
         </button>
+<button class="btn" id="restoreBtn" onclick="restoreWindow('massScavengeGalkir95')" style="display:none;">Развернуть</button>
     <table id="massScavengeGalkir95Table" class="vis" border="1" style="width: 100%;background-color:${backgroundColor};border-color:${borderColor}">
         <tr>
             <td colspan="10" id="massScavengeGalkir95Title" style="text-align:center; width:auto; background-color:${headerColor}">
@@ -1248,6 +1333,7 @@ $("#sendMassOnce").focus();
 setTimeout(function() {
     loadImportantLogs();
     restoreRepeats();
+    restoreMinimizeState();
 }, 1000);
 
 // ===== ПОДГОТОВКА К ОТПРАВКЕ =====
@@ -1611,12 +1697,26 @@ function sendGroupAuto(groupNr, premiumEnabled, callback) {
 // ===== ОТПРАВКА ВСЕХ ГРУПП ПОСЛЕДОВАТЕЛЬНО =====
 // Автоматическая отправка всех групп одна за другой с задержкой между ними
 function sendAllGroupsAuto(premiumEnabled, onComplete) {
+    // Проверка и перенаправление на страницу массового сбора перед отправкой
+    if (!ensureOnMassScavengePage()) {
+        // Если произошло перенаправление, выходим из функции
+        // Функция будет вызвана снова после перезагрузки страницы
+        saveImportantLog("Перенаправление на страницу массового сбора перед отправкой");
+        return;
+    }
+    
     var totalGroups = Object.keys(squads).length;
     var currentGroup = 0;
     
     saveImportantLog(`Начата автоматическая отправка всех групп (всего: ${totalGroups})`);
     
     function sendNext() {
+        // Проверка перед каждой отправкой группы
+        if (!ensureOnMassScavengePage()) {
+            saveImportantLog("Перенаправление на страницу массового сбора во время отправки");
+            return;
+        }
+        
         if (currentGroup >= totalGroups) {
             saveImportantLog(`Все группы отправлены (всего: ${totalGroups})`);
             if (onComplete) onComplete();
@@ -1923,8 +2023,61 @@ function resetSettings() {
     window.location.reload();
 }
 
+// Глобальная переменная для отслеживания состояния минимизации
+var isMinimized = false;
+
+// Функция минимизации окна
+function minimizeWindow(title) {
+    var $window = $("#" + title);
+    $window.addClass("minimized");
+    isMinimized = true;
+    localStorage.setItem("massScavengeMinimized", "true");
+}
+
+// Функция восстановления окна
+function restoreWindow(title) {
+    var $window = $("#" + title);
+    $window.removeClass("minimized");
+    isMinimized = false;
+    localStorage.setItem("massScavengeMinimized", "false");
+}
+
+// Функция закрытия окна
 function closeWindow(title) {
     $("#" + title).remove();
+    localStorage.setItem("massScavengeMinimized", "false");
+}
+
+// Отслеживание видимости страницы (переключение вкладок)
+function handleVisibilityChange() {
+    if (document.hidden) {
+        // Страница скрыта (переключились на другую вкладку)
+        if ($("#massScavengeGalkir95").length > 0 && !isMinimized) {
+            minimizeWindow('massScavengeGalkir95');
+        }
+    } else {
+        // Страница видна (вернулись на вкладку)
+        // Окно остается минимизированным, пользователь может развернуть его вручную
+    }
+}
+
+// Добавление обработчиков событий видимости страницы
+if (typeof document.hidden !== "undefined") {
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+} else if (typeof document.mozHidden !== "undefined") {
+    document.addEventListener("mozvisibilitychange", handleVisibilityChange);
+} else if (typeof document.msHidden !== "undefined") {
+    document.addEventListener("msvisibilitychange", handleVisibilityChange);
+} else if (typeof document.webkitHidden !== "undefined") {
+    document.addEventListener("webkitvisibilitychange", handleVisibilityChange);
+}
+
+// Восстановление состояния минимизации при загрузке
+function restoreMinimizeState() {
+    var savedState = localStorage.getItem("massScavengeMinimized");
+    if (savedState === "true" && $("#massScavengeGalkir95").length > 0) {
+        minimizeWindow('massScavengeGalkir95');
+    }
 }
 
 function zeroPadded(val) {
