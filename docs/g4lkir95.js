@@ -1127,10 +1127,10 @@ html = `
             </tr>
             <tr>
                 <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:12px;">Интервал (мин-макс)</td>
-                <td style="background-color:${backgroundColor}; padding:4px; text-align:center;"><input type="number" id="repeatIntervalMin" min="1" value="60" style="width:35px; text-align:center;"></td>
-                <td style="background-color:${backgroundColor}; padding:4px; text-align:center;"><input type="number" id="repeatIntervalMax" min="1" value="60" style="width:35px; text-align:center;"></td>
+                <td style="background-color:${backgroundColor}; padding:4px; text-align:center;"><input type="number" id="repeatIntervalMin" min="1" value="60" style="width:45px; text-align:center;"></td>
+                <td style="background-color:${backgroundColor}; padding:4px; text-align:center;"><input type="number" id="repeatIntervalMax" min="1" value="60" style="width:45px; text-align:center;"></td>
                 <td style="background-color:${backgroundColor}; padding:4px; color:${titleColor}; font-size:12px;">Количество</td>
-                <td style="background-color:${backgroundColor}; padding:4px; text-align:center;"><input type="number" id="repeatCount" min="1" value="5" style="width:35px; text-align:center;"></td>
+                <td style="background-color:${backgroundColor}; padding:4px; text-align:center;"><input type="number" id="repeatCount" min="1" value="5" style="width:45px; text-align:center;"></td>
             </tr>
         </tbody>
     </table>
