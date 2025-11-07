@@ -1133,8 +1133,16 @@ html = `
 </div>
 `;
 
-$(".maincell").eq(0).prepend(html);
-$("#mobileContent").eq(0).prepend(html);
+var targetContainer = is_mobile ? $("#mobileContent").eq(0) : $(".maincell").eq(0);
+if (targetContainer.length === 0) {
+    // fallback: если основная цель не найдена, используем доступный контейнер
+    targetContainer = $(".maincell").eq(0);
+    if (targetContainer.length === 0) {
+        targetContainer = $("#mobileContent").eq(0);
+    }
+}
+
+targetContainer.prepend(html);
 
 if (is_mobile == false) {
     $("#massScavengeGalkir95").css("position", "fixed");
